@@ -7,6 +7,6 @@ The game is inspired by classic 3d platformer games, especially Sonic Adventure.
 To play the development build, download the "Builds" folder, and run the .exe file.
 
 
-![alt text](https://github.com/dan-turner-djt/Project-Swing/blob/8b70a60e5ba935a2037e883b96305ca7a10a220d/Screenshots/screenshot1.png)
-![alt text](https://github.com/dan-turner-djt/Project-Swing/blob/8b70a60e5ba935a2037e883b96305ca7a10a220d/Screenshots/screenshot2.png)
-![alt text](https://github.com/dan-turner-djt/Project-Swing/blob/8b70a60e5ba935a2037e883b96305ca7a10a220d/Screenshots/screenshot3.png)
+![alt text](https://github.com/dan-turner-djt/Project-Swing/blob/main/Screenshots/sc1.png)
+![alt text](https://github.com/dan-turner-djt/Project-Swing/blob/main/Screenshots/sc2.png)
+![alt text](https://github.com/dan-turner-djt/Project-Swing/blob/main/Screenshots/sc3.png)
