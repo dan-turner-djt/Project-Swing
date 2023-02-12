@@ -147,7 +147,7 @@ public struct GroundingEdgeCollisionInfo
 			calculatedGroundNormal = detectedGroundNormal.normal;
 		}
 
-		if (!PlayerPhysicsController.CanWalkOnSlope (calculatedGroundNormal, -gravDir))
+		if (!CollisionController.CanWalkOnSlope(calculatedGroundNormal, -gravDir, gravDir, Vector3.zero))
         {
 			//if we can't land on the slope then we should'nt do the next part anyway
 			return;
@@ -174,23 +174,22 @@ public struct GroundingEdgeCollisionInfo
 			Vector3 edgeLine = Vector3.Cross(calculatedGroundNormal, sortedEdgeNormals[i].normal).normalized; //perpendicular direction, ie the line of the edge
 			Vector3 interpFlattenedAgainstEdgeLine = Vector3.ProjectOnPlane(interpolatedNormal, edgeLine);
 
-			if (!PlayerPhysicsController.CanWalkOnSlope (interpFlattenedAgainstEdgeLine, -gravDir))
+			if (!CollisionController.CanWalkOnSlope(interpFlattenedAgainstEdgeLine, -gravDir, gravDir, Vector3.zero))
             {
 				continue;
             }
 
 			float angleGroundToGravUp = Vector3.SignedAngle(-gravDir, calculatedGroundNormal, edgeLine);
-			float angleInterpToGravUp = Vector3.SignedAngle(-gravDir, interpolatedNormal, edgeLine);
 			float angleEdgeToGravUp = Vector3.SignedAngle(-gravDir, sortedEdgeNormals[i].normal, edgeLine);
 
-			//interp and ground are on the same side of the edge (if can't just walk on that edge normally) and the ground and edge are opposite (-gravDir lies between them)
-			if ((PlayerPhysicsController.CanWalkOnSlope (sortedEdgeNormals[i].normal, -gravDir) || (Mathf.Sign(angleGroundToGravUp) == Mathf.Sign(angleInterpToGravUp))) && (Mathf.Sign(angleGroundToGravUp) != Mathf.Sign(angleEdgeToGravUp) || ((calculatedGroundNormal == -gravDir && PlayerPhysicsController.CanWalkOnSlope (sortedEdgeNormals[i].normal, -gravDir)) || sortedEdgeNormals[i].normal == -gravDir)))
+			//can normally land on edge and the ground and edge are opposite (-gravDir lies between them)
+			if (CollisionController.CanWalkOnSlope(sortedEdgeNormals[i].normal, -gravDir, gravDir, Vector3.zero)
+			&& (Mathf.Sign(angleGroundToGravUp) != Mathf.Sign(angleEdgeToGravUp) || (calculatedGroundNormal == -gravDir || sortedEdgeNormals[i].normal == -gravDir)))
             {
 				float velocityMagInDir = ExtVector3.MagnitudeInDirection(flattenedVelocity, flattenedCurrentNormal);
 
-				if (velocityMagInDir < 4)
+				if (velocityMagInDir < SlopeInfo.maxVelocityForHardEdgeWrapping)
 				{
-					
 					found = true;
 
 					Vector3 remaining = calculatedGroundNormal - interpFlattenedAgainstEdgeLine;

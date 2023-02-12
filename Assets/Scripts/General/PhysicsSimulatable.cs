@@ -9,7 +9,9 @@ public class PhysicsSimulatable : Updatable {
 
 	public bool isInsideSubUpdater {get; set;}
 	public CollisionInfo collisionInfo;
-	public Vector3 collisionVelocity;
+	public Vector3 normalCollisionVelocity;
+	public Vector3 movingPlatformVelocity;
+	public Vector3 extraCollisionVelocity;
 
 	protected void DoAwake ()
 	{
@@ -55,15 +57,40 @@ public class PhysicsSimulatable : Updatable {
 
 	}
 
+	public virtual void FinalizeAfterCollisionStep(float deltaTime)
+    {
+
+    }
+
 	public virtual void FinalizeAfterCollision (float deltaTime)
 	{
 
 	}
 
+	public void SetSteps (int steps)
+    {
+		collisionInfo.totalSteps = steps;
+    }
 
-	public void SetStepVelocity (int steps)
+	public void SetStepVelocity ()
 	{
-		collisionInfo.stepVelocity = collisionVelocity / steps;
+		//Debug.Log(normalCollisionVelocity.magnitude);
+		collisionInfo.stepVelocity = (normalCollisionVelocity + movingPlatformVelocity + extraCollisionVelocity) / collisionInfo.totalSteps; //collisionVelocity is edited after a step (it comes from collisionInfo.velocity which is the running editted velocity)
+	}
+
+	public void SetNormalCollisionVelocity (Vector3 newVelocity)
+    {
+		normalCollisionVelocity = newVelocity;
+    }
+
+	public void SetMovingPlatformVelocity(Vector3 newMovingPlatformVelocity)
+	{
+		movingPlatformVelocity = newMovingPlatformVelocity;
+	}
+
+	public void SetExtraCollisionVelocity(Vector3 newExtraVelocity)
+	{
+		extraCollisionVelocity = newExtraVelocity;
 	}
 
 
@@ -73,6 +100,8 @@ public class PhysicsSimulatable : Updatable {
 		public Vector3 targetPosition;
 		public Vector3 safeMoveDirection;
 		public Vector3 velocity;
+		public int totalSteps;
+		public Vector3 totalPreviousStepsVelocity;
 		public Vector3 stepVelocity;
 		public bool hasCollided;
 		public bool hasFailed;
@@ -81,11 +110,6 @@ public class PhysicsSimulatable : Updatable {
 		public bool collisionSuccessful;
 		public bool foundWalkableGroundNormal;
 		public bool foundMovingPlatform;
-		public List<SphereCollisionDetect.CollisionPointInfo> pointsInfo;
-		public float minWallAngle;
-		public float maxWallAngle;
-		public Vector3 minWallNormal;
-		public Vector3 maxWallNormal;
-		public Vector3 averageWallNormal;
+		public List<GroundCastInfo> wallPoints;
 	}
 }

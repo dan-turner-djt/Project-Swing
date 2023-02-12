@@ -53,6 +53,120 @@ public static class ExtCollider {
 		return resultsBuffer;
 	}
 
+	public static List<ContactInfo> CollectNormalsOnCollider(BoxCollider collider, Vector3 centre, float radius, List<ContactInfo> resultsBuffer)
+	{
+		resultsBuffer.Clear();
+
+		Vector3 localCentre = ToLocal(collider, collider.center, centre);
+		Vector3 extents = collider.size;
+		Vector3 halfExtents = extents * .5f;
+
+		//We try to choose the best 3 faces on the box to do our rectangle tests.
+		//Is it safe to use the lineCenter as the reference point?
+		Vector3 xAxis = new Vector3(Mathf.Sign(localCentre.x), 0, 0);
+		Vector3 yAxis = new Vector3(0, Mathf.Sign(localCentre.y), 0);
+		Vector3 zAxis = new Vector3(0, 0, Mathf.Sign(localCentre.z));
+
+		resultsBuffer.Add(new ContactInfo(centre, collider.transform.TransformDirection(xAxis.normalized)));
+		resultsBuffer.Add(new ContactInfo(centre, collider.transform.TransformDirection(yAxis.normalized)));
+		resultsBuffer.Add(new ContactInfo(centre, collider.transform.TransformDirection(zAxis.normalized)));
+		return resultsBuffer;
+	}
+
+	public static bool CheckIsDirectOnEdge(Collider collider, Vector3 centre, Vector3 point)
+	{
+		if (collider is MeshCollider)
+        {
+
+        }
+		else if (collider is BoxCollider)
+        {
+			return CheckIsDirectOnEdge((BoxCollider)collider, centre, point);
+        }
+
+		return true;
+	}
+
+	public static bool CheckIsDirectOnEdge(BoxCollider collider, Vector3 centre, Vector3 point)
+	{
+		Vector3 localCentre = ToLocal(collider, collider.center, centre);
+		Vector3 extents = collider.size;
+		Vector3 halfExtents = extents * .5f;
+
+		//We try to choose the best 3 faces on the box to do our rectangle tests.
+		//Is it safe to use the lineCenter as the reference point?
+		Vector3 xAxis = new Vector3(Mathf.Sign(localCentre.x), 0, 0);
+		Vector3 yAxis = new Vector3(0, Mathf.Sign(localCentre.y), 0);
+		Vector3 zAxis = new Vector3(0, 0, Mathf.Sign(localCentre.z));
+
+		Rect3D xRect = new Rect3D(Vector3.Scale(xAxis, halfExtents), Vector3.forward, Vector3.up, extents.z, extents.y, collider.transform.lossyScale.z, collider.transform.lossyScale.y);
+		Rect3D yRect = new Rect3D(Vector3.Scale(yAxis, halfExtents), Vector3.right, Vector3.forward, extents.x, extents.z, collider.transform.lossyScale.x, collider.transform.lossyScale.z);
+		Rect3D zRect = new Rect3D(Vector3.Scale(zAxis, halfExtents), Vector3.right, Vector3.up, extents.x, extents.y, collider.transform.lossyScale.x, collider.transform.lossyScale.y);
+
+		IntersectPoints xIntersect = Geometry.ClosestPointOnRectangleToPoint(localCentre, xRect, true);
+		float xDistance = (xIntersect.second - xIntersect.first).sqrMagnitude;
+		IntersectPoints yIntersect = Geometry.ClosestPointOnRectangleToPoint(localCentre, yRect, true);
+		float yDistance = (yIntersect.second - yIntersect.first).sqrMagnitude;
+		IntersectPoints zIntersect = Geometry.ClosestPointOnRectangleToPoint(localCentre, zRect, true);
+		float zDistance = (zIntersect.second - zIntersect.first).sqrMagnitude;
+
+		IntersectPoints closestIntersect;
+		Vector3 closestNormal;
+		Rect3D closestRect;
+		if (xDistance <= yDistance && xDistance <= zDistance)
+		{
+			closestIntersect = xIntersect;
+			closestNormal = xAxis;
+			closestRect = xRect;
+		}
+		else if (yDistance <= xDistance && yDistance <= zDistance)
+		{
+			closestIntersect = yIntersect;
+			closestNormal = yAxis;
+			closestRect = yRect;
+		}
+		else
+		{
+			closestIntersect = zIntersect;
+			closestNormal = zAxis;
+			closestRect = zRect;
+		}
+
+		// Together these two lists make up 4 tuples of vertices forming edges and the distance between their opposite edge
+		List<Vector3> edgePoints1 = new ();
+		edgePoints1.Add (closestRect.topLeft);
+		edgePoints1.Add(closestRect.topLeft);
+		edgePoints1.Add(closestRect.topRight);
+		edgePoints1.Add(closestRect.bottomLeft);
+		List<Vector3> edgePoints2 = new();
+		edgePoints2.Add(closestRect.topRight);
+		edgePoints2.Add(closestRect.bottomLeft);
+		edgePoints2.Add(closestRect.bottomRight);
+		edgePoints2.Add(closestRect.bottomRight);
+		List<float> distanceBetween = new ();
+		distanceBetween.Add(closestRect.trueHeight);
+		distanceBetween.Add(closestRect.trueWidth);
+		distanceBetween.Add(closestRect.trueWidth);
+		distanceBetween.Add(closestRect.trueHeight);
+
+		for (int i = 0; i < edgePoints1.Count; i++)
+        {
+			Vector3 localPoint = ToLocal(collider, collider.center, point);
+			Vector3 closestPoint = Geometry.ClosestPointOnLineSegmentToPoint(localPoint, edgePoints1[i], edgePoints2[i]);
+			float distanceBetweenPoints = (localPoint - closestPoint).magnitude * distanceBetween[i];
+
+			Debug.Log(distanceBetweenPoints);
+
+			if (distanceBetweenPoints < 0.1f)
+            {
+				return true;
+            }
+		}
+
+
+		return false;
+	}
+
 
 	public static ContactInfo ClosestPointOnSurface(SphereCollider collider, Vector3 centre)
 	{
@@ -65,7 +179,6 @@ public static class ExtCollider {
 
 		return ToGlobal(collider, collider.center, contact);
 	}
-
 
 	public static ContactInfo ClosestPointOnSurface(CapsuleCollider collider, Vector3 centre)
 	{
@@ -83,8 +196,6 @@ public static class ExtCollider {
 		return ToGlobal(collider, collider.center, contact);
 	}
 
-
-
 	public static ContactInfo ClosestPointOnSurface(BoxCollider collider, Vector3 centre)
 	{
 		Vector3 localCentre = ToLocal(collider, collider.center, centre);
@@ -97,9 +208,9 @@ public static class ExtCollider {
 		Vector3 yAxis = new Vector3(0, Mathf.Sign(localCentre.y), 0);
 		Vector3 zAxis = new Vector3(0, 0, Mathf.Sign(localCentre.z));
 
-		Rect3D xRect = new Rect3D(Vector3.Scale(xAxis, halfExtents), Vector3.forward, Vector3.up, extents.z, extents.y);
-		Rect3D yRect = new Rect3D(Vector3.Scale(yAxis, halfExtents), Vector3.right, Vector3.forward, extents.x, extents.z);
-		Rect3D zRect = new Rect3D(Vector3.Scale(zAxis, halfExtents), Vector3.right, Vector3.up, extents.x, extents.y);
+		Rect3D xRect = new Rect3D(Vector3.Scale(xAxis, halfExtents), Vector3.forward, Vector3.up, extents.z, extents.y, collider.transform.lossyScale.z, collider.transform.lossyScale.y);
+		Rect3D yRect = new Rect3D(Vector3.Scale(yAxis, halfExtents), Vector3.right, Vector3.forward, extents.x, extents.z, collider.transform.lossyScale.x, collider.transform.lossyScale.z);
+		Rect3D zRect = new Rect3D(Vector3.Scale(zAxis, halfExtents), Vector3.right, Vector3.up, extents.x, extents.y, collider.transform.lossyScale.x, collider.transform.lossyScale.y);
 
 		IntersectPoints xIntersect = Geometry.ClosestPointOnRectangleToPoint(localCentre, xRect, true);
 		float xDistance = (xIntersect.second - xIntersect.first).sqrMagnitude;
@@ -154,27 +265,6 @@ public static class ExtCollider {
 
 		return ToGlobal(collider, collider.center, new ContactInfo(closestIntersect.second, closestNormal));
 	}
-
-
-	public static List<ContactInfo> CollectNormalsOnCollider(BoxCollider collider, Vector3 centre, float radius, List<ContactInfo> resultsBuffer)
-	{
-		resultsBuffer.Clear();
-
-		Vector3 localCentre = ToLocal(collider, collider.center, centre);
-		Vector3 extents = collider.size;
-		Vector3 halfExtents = extents * .5f;
-
-		//We try to choose the best 3 faces on the box to do our rectangle tests.
-		//Is it safe to use the lineCenter as the reference point?
-		Vector3 xAxis = new Vector3(Mathf.Sign(localCentre.x), 0, 0);
-		Vector3 yAxis = new Vector3(0, Mathf.Sign(localCentre.y), 0);
-		Vector3 zAxis = new Vector3(0, 0, Mathf.Sign(localCentre.z));
-
-		resultsBuffer.Add (new ContactInfo (centre, collider.transform.TransformDirection(xAxis.normalized)));
-		resultsBuffer.Add (new ContactInfo (centre, collider.transform.TransformDirection(yAxis.normalized)));
-		resultsBuffer.Add (new ContactInfo (centre, collider.transform.TransformDirection(zAxis.normalized)));
-		return resultsBuffer;
-	}
 	#endregion
 
 
@@ -224,9 +314,9 @@ public static class ExtCollider {
 		Vector3 yAxis = new Vector3(0, Mathf.Sign(lineCenter.y), 0);
 		Vector3 zAxis = new Vector3(0, 0, Mathf.Sign(lineCenter.z));
 
-		Rect3D xRect = new Rect3D(Vector3.Scale(xAxis, halfExtents), Vector3.forward, Vector3.up, extents.z, extents.y);
-		Rect3D yRect = new Rect3D(Vector3.Scale(yAxis, halfExtents), Vector3.right, Vector3.forward, extents.x, extents.z);
-		Rect3D zRect = new Rect3D(Vector3.Scale(zAxis, halfExtents), Vector3.right, Vector3.up, extents.x, extents.y);
+		Rect3D xRect = new Rect3D(Vector3.Scale(xAxis, halfExtents), Vector3.forward, Vector3.up, extents.z, extents.y, collider.transform.lossyScale.z, collider.transform.lossyScale.y);
+		Rect3D yRect = new Rect3D(Vector3.Scale(yAxis, halfExtents), Vector3.right, Vector3.forward, extents.x, extents.z, collider.transform.lossyScale.x, collider.transform.lossyScale.z);
+		Rect3D zRect = new Rect3D(Vector3.Scale(zAxis, halfExtents), Vector3.right, Vector3.up, extents.x, extents.y, collider.transform.lossyScale.x, collider.transform.lossyScale.y);
 
 		IntersectPoints xIntersect = Geometry.ClosestPointOnRectangleToLine(localSegment0, localSegment1, xRect, true);
 		float xDistance = (xIntersect.second - xIntersect.first).sqrMagnitude;

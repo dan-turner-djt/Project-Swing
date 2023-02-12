@@ -66,7 +66,7 @@ public struct SphereCollisionInfo
 		//We check for an angle greater than 3 as a safety since our closestPointOnSurface might have been detected slightly inaccurately,
 		//which might lead to sliding when depenetrating (such as on the floor when standing still)
 		//This is a custom Vector3.Angle method that assumes the vectors are already normalized for performance reasons.
-		if(ExtVector3.Angle(interpolatedNormal, normal) > 3f)
+		if(ExtVector3.Angle(interpolatedNormal, normal) > 0.01f)
 		{
 			isOnEdge = true;
 			return interpolatedNormal;

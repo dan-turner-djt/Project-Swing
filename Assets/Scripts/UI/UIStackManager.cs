@@ -23,7 +23,7 @@ public class UIStackManager : MonoBehaviour {
 	{
 		if (UIStack.Count > 0) 
 		{
-			if (input.GetButtonDown("Cancel")) 
+			if (input.GetButtonDown(GeneralInput.AxesNames.Cancel)) 
 			{
 				if (UIStack.Count == 1) 
 				{

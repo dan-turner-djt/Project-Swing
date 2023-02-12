@@ -105,7 +105,7 @@ public class MovingPlatformController : PhysicsSimulatable {
 
 	public override void PrepareForCollision (float deltaTime)
 	{
-		collisionVelocity = velocity;
+		SetNormalCollisionVelocity (velocity);
 	}
 	
 	public override bool DoCollisionUpdate (float deltaTime, Vector3 stepVelocity)

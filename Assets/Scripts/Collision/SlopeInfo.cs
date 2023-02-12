@@ -12,6 +12,8 @@ public static class SlopeInfo
 	public static float walkableSlopeLimit = 70;
 	public static float concaveSlopeLimit = 60;
 	public static float convexSlopeLimit = 45;
+	public static float staircaseSlopeLimit = 89;
+	public static float maxVelocityForHardEdgeWrapping = 5;
 
 
 	public static bool IsSlopeSteepOrUp (float slopeAngle)
@@ -26,9 +28,9 @@ public static class SlopeInfo
 		return false;
 	}
 
-	public static bool IsSlopeSteepOrUp(Vector3 gravDir, Vector3 groundPivotUp)
+	public static bool IsSlopeSteepOrUp(Vector3 gravDir, Vector3 transformUp)
 	{
-		float slopeAngle = Vector3.Angle(-gravDir, groundPivotUp);
+		float slopeAngle = Vector3.Angle(-gravDir, transformUp);
 
 		SlopeType slopeType = GetSlopeType(slopeAngle);
 

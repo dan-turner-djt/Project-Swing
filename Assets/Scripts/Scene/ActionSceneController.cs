@@ -9,6 +9,9 @@ public class ActionSceneController : GeneralSceneController
 	GameObject hudObject;
 	HUDController hudController;
 
+	public DebugInfoManager debugInfoManager;
+	public CollisionTestingManager collisionTestingManager;
+
 	public GameObject pauseMenu;
 	public GameObject pauseOptionsMenu;
 
@@ -20,6 +23,14 @@ public class ActionSceneController : GeneralSceneController
 	public List <GameObject> checkpointsList;
 
 	public int itemCount = 0;
+
+	public Vector3 gravityDir = -Vector3.up;
+
+	public enum DebugModeType
+    {
+		None, Player, Camera
+    }
+	public DebugModeType debugModeType;
 
 	void Awake ()
 	{
@@ -43,6 +54,12 @@ public class ActionSceneController : GeneralSceneController
 		hudController.DoStart ();
 
 		elapsedGameTime = sceneRecord.savedElapsedGameTime;
+
+		debugInfoManager = GetComponent<DebugInfoManager>();
+		debugInfoManager.DoStart(this);
+
+		collisionTestingManager = GetComponent<CollisionTestingManager>();
+		collisionTestingManager.DoStart(this);
 	}
 
 
@@ -52,7 +69,7 @@ public class ActionSceneController : GeneralSceneController
 
 		if (!interactedWithAMenu) 
 		{
-			if (input.GetButtonDown("Start")) 
+			if (input.GetButtonDown(GeneralInput.AxesNames.Start)) 
 			{
 				if (!gamePaused && !textBoxManager.GetIsTextBoxActive()) 
 				{
@@ -63,7 +80,7 @@ public class ActionSceneController : GeneralSceneController
 		}
 
 
-		if (!(Input.GetKeyDown (KeyCode.Alpha0) || !Input.GetKey (KeyCode.Alpha9))) 
+		if (gameController.debugMode && !(Input.GetKeyDown (KeyCode.Alpha0) || !Input.GetKey (KeyCode.Alpha9))) 
 		{
 			//advance normally or frame by frame?
 			gameController.frameByFrame = true;
@@ -74,6 +91,27 @@ public class ActionSceneController : GeneralSceneController
 			gameController.frameByFrame = false;
 			base.UpdateUpdatables ();
 		}
+
+		if (gameController.debugMode)
+        {
+			if (input.GetButtonDown(GeneralInput.AxesNames.DpadHorizontal))
+			{
+				float rawInput = input.GetRawInput(GeneralInput.AxesNames.DpadHorizontal);
+
+				if (rawInput > 0)
+                {
+					debugModeType = (DebugModeType) Mathf.Min ((int) debugModeType + 1, System.Enum.GetValues (typeof(DebugModeType)).Length - 1);
+                }
+				else
+                {
+					debugModeType = (DebugModeType)Mathf.Max((int)debugModeType - 1, 0);
+				}
+			}
+		}
+		else
+        {
+			debugModeType = DebugModeType.None;
+        }
 
 
 		if (!gamePaused && !interactedWithAMenu) 
@@ -103,7 +141,8 @@ public class ActionSceneController : GeneralSceneController
 
 		}*/
 
-
+		collisionTestingManager.DoUpdate(gameController.debugMode);
+		debugInfoManager.DoUpdate(gameController.debugMode);
 
 
 		interactedWithAMenu = false;
@@ -115,14 +154,35 @@ public class ActionSceneController : GeneralSceneController
 		interactedWithAMenu = true;
 		gamePaused = true;
 
+		PauseComponenetsInUpdatables();
+
 		pauseMenu.transform.SetAsLastSibling(); //renders it in front of every other UI component in the hierachy level
 		UIStackManager.AddComponentToStack (pauseMenu);
+
 	}
 
 	public void UnPause ()
 	{
 		interactedWithAMenu = true;
 		gamePaused = false;
+
+		UnPauseComponenetsInUpdatables();
+	}
+
+	public void PauseComponenetsInUpdatables ()
+    {
+		foreach (Updatable u in updatables)
+        {
+			u.PauseAnimator();
+        }
+    }
+
+	public void UnPauseComponenetsInUpdatables()
+	{
+		foreach (Updatable u in updatables)
+		{
+			u.UnPauseAnimator();
+		}
 	}
 
 	public void RestartScene () 
@@ -258,5 +318,4 @@ public class ActionSceneController : GeneralSceneController
     {
 		return cameras[0];
     }
-		
 }

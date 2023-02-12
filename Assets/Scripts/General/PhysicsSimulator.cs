@@ -84,14 +84,14 @@ public class PhysicsSimulator : MonoBehaviour {
 		float biggestDistance = 0;
 		if (simulatablesToUpdate.Count == 1) 
 		{
-			biggestDistance = simulatablesToUpdate [0].collisionVelocity.magnitude;
+			biggestDistance = simulatablesToUpdate [0].normalCollisionVelocity.magnitude;
 		} 
 		else 
 		{
 			foreach (var simulatable in simulatablesToUpdate) 
 			{
 				//cant condense this into previous loop as collision velocity must be set for everyone first
-				Vector3 moveVector = simulatable.collisionVelocity;
+				Vector3 moveVector = simulatable.normalCollisionVelocity;
 
 				//loop through and add distances together to see which pair is the greatest
 				foreach (var newSimulatable in simulatablesToUpdate) 
@@ -103,7 +103,7 @@ public class PhysicsSimulator : MonoBehaviour {
 					} 
 					else 
 					{
-						Vector3 otherMoveVector = newSimulatable.collisionVelocity;
+						Vector3 otherMoveVector = newSimulatable.normalCollisionVelocity;
 						float combinedDistance = (moveVector - otherMoveVector).magnitude;
 
 						//find what the fastest is
@@ -144,12 +144,11 @@ public class PhysicsSimulator : MonoBehaviour {
 			}
 		}
 
-		//Debug.Log (steps);
-
 		//calculate each's step velocity before we begin
 		foreach (var simulatable in simulatablesToUpdate) 
 		{
-			simulatable.SetStepVelocity (steps);
+			simulatable.SetSteps(steps);
+			simulatable.SetStepVelocity ();
 		}
 
 

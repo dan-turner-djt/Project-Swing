@@ -37,4 +37,14 @@ public class Updatable : MonoBehaviour {
 	{
 
 	}
+
+	public virtual void PauseAnimator ()
+    {
+
+    }
+
+	public virtual void UnPauseAnimator()
+	{
+
+	}
 }

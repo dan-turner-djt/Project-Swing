@@ -14,31 +14,34 @@ public class PlayerActionsController : PlayerPhysicsController {
 
 	GeneralInput input;
 	PlayerGraphicsRotations pgr;
+	PlayerGraphicsController pgc;
 
 	public PlayerInput playerInput;
 	public LayerMask swingPointsMask;
 	public Transform tailEnd;
 	LineRenderer lineRenderer;
 
-	public float normalAcceleration;
-	public float normalDeceleration;
-	public float iceAcceleration;
-	public float iceDeceleration;
-	public float airDeceleration;
-	public float normalSkidDeceleration;
-	public float iceSkidDeceleration;
-	public float slopeAdditionalDeceleration;
-	public float slopeAdditionalAcceleration;
-	public float walkSpeed;
-	public float walkInputTolerance;
-	public float topSpeed;
-	public float jumpPower;
-	public float gravityStrength;
-	public float maxGravitySpeed;
-	public float normalTurnSpeed;
-	public float iceTurnSpeed;
-	public float aligningSpeed;
-
+	float normalAcceleration = 12;
+	float normalDeceleration = 7;
+	float iceAcceleration = 8;
+	float iceDeceleration = 3;
+	float airDeceleration = 10;
+	float normalSkidDeceleration = 14;
+	float iceSkidDeceleration = 8;
+	float airBackwardsDeceleration = 16;
+	float slopeAdditionalDeceleration = 12;
+	float slopeAdditionalAcceleration = 20;
+	float walkSpeed = 2;
+	float walkInputTolerance = 0.8f;
+	float topSpeed = 12;
+	float jumpPower = 12;
+	float gravityStrength = 36;
+	float maxGravitySpeed = 40;
+	float groundTurnSpeed = 12;
+	float airTurnSpeed = 14;
+	float iceTurnSpeed = 5;
+	float aligningSpeed = 6;
+	float skidAngle = 130;
 
 	public bool isSkidding;
 
@@ -63,18 +66,13 @@ public class PlayerActionsController : PlayerPhysicsController {
 	public bool currentlyUsingBooster;
 	public bool currentlyUsingAirBooster;
 	public bool currentlyUsingSpring;
-	float usingBoosterTimer;
-	float usingSpringTimer;
-
-	Vector3 slopeVelocity;
-
-
 
 	void Awake () 
 	{
 		base.DoAwake ();
-		input = GameObject.Find ("SceneController").GetComponent<GeneralInput> ();
+		input = sc.GetComponent<GeneralInput> ();
 		pgr = GetComponent <PlayerGraphicsRotations> ();
+		pgc = GetComponent<PlayerGraphicsController>();
 		playerInput = GetComponent <PlayerInput> ();
 
 	}
@@ -85,6 +83,7 @@ public class PlayerActionsController : PlayerPhysicsController {
 		sc.AddPlayerToList (gameObject);
 
 		pgr.DoStart();
+		pgc.DoStart();
 
 		//find out where the players spawn position should be (eg checkpoint?)
 		Vector3 receivedStartPos = sc.GetPlayerSpawnPos ();
@@ -109,14 +108,17 @@ public class PlayerActionsController : PlayerPhysicsController {
 
 		playerInput.glideAxis = false;
 
-		if (Input.GetKey (KeyCode.L)) 
+		if (sc.gameController.debugMode)
+        {
+			if (input.GetButtonDown(GeneralInput.AxesNames.DebugPlace))
+			{
+				sc.debugInfoManager.CreateManualDebugWithCollision(sc.gameController.debugMode, transform.position, groundInfo.up, groundPivot.rotation, groundInfo.GetIsGrounded());
+			}
+		}
+
+		if (sc.debugModeType == ActionSceneController.DebugModeType.Player) 
 		{
-			currentlySimulatable = false;
-			DebugMove ();
-		} 
-		else 
-		{
-			currentlySimulatable = true;
+			DebugMove (playerInput.GetRawInput().normalized);
 		}
 
 	}
@@ -124,12 +126,20 @@ public class PlayerActionsController : PlayerPhysicsController {
 	public override void DoFinalUpdate ()
 	{
 		UpdateGraphicsObjects (Time.deltaTime);
+
+		// This has to be reset here rather than in the next jump method check, as that can run multiple times per frame whereas the graphics only run once
+		justStartedJumping = false;
+
 	}
 
+	protected override void DoPlayerInputUpdate(float deltaTime)
+    {
+		playerInput.DoUpdate();
+	}
 
-	protected override void PreCollisionControl (float deltaTime) {
-
-		playerInput.DoUpdate (deltaTime, velocity, maxSpeed, groundPivot.up);
+	protected override void PreCollisionControl (float deltaTime)
+	{
+		base.PostCollisionControl(deltaTime);
 
 		if (Input.GetAxis ("Grab") > 0) 
 		{
@@ -249,7 +259,6 @@ public class PlayerActionsController : PlayerPhysicsController {
 			pic.DealWithInteractables (deltaTime);
 		}
 
-		Vector3 lateralVelocity = groundPivot.InverseTransformDirection (velocity);
 		//Debug.Log (ExtVector3.PrintFullVector3 (new Vector3 (lateralVelocity.x, 0, lateralVelocity.z).normalized));
 		//Debug.Log (ExtVector3.PrintFullVector3 (new Vector3 (facingDir.x, 0, facingDir.z).normalized));
 	}
@@ -265,7 +274,8 @@ public class PlayerActionsController : PlayerPhysicsController {
 
 	void UpdateGraphicsObjects (float deltaTime) 
 	{
-		pgr.DoUpdate (deltaTime, groundPivot.up, groundInfo.GetIsGrounded(), isHooked, facingDir);
+		pgr.DoUpdate (deltaTime, groundInfo.up, groundInfo.GetIsGrounded(), isHooked, facingDir);
+		pgc.DoUpdate (deltaTime, sc.gamePaused, velocity, gravityDir, groundInfo.up, groundInfo.GetIsGrounded(), playerInput.GetRawInput(), isHooked, isJumping, justStartedJumping);
 
 		if (tailEnd.position == transform.position) 
 		{
@@ -485,9 +495,9 @@ public class PlayerActionsController : PlayerPhysicsController {
 		float magInDir = ExtVector3.MagnitudeInDirection(velocity, -playerToSwingPoint.normalized);
 		if (magInDir > 0 && playerToSwingPoint.magnitude >= currentTailLength)
         {
-			velocity = Vector3.ProjectOnPlane(velocity, groundPivot.up);
+			velocity = Vector3.ProjectOnPlane(velocity, groundInfo.up);
 		}
-		velocity = Vector3.ProjectOnPlane(velocity, groundPivot.up);
+		velocity = Vector3.ProjectOnPlane(velocity, groundInfo.up);
 
 		//set facingDir
 		if (swingAxis != Vector3.zero)
@@ -523,6 +533,7 @@ public class PlayerActionsController : PlayerPhysicsController {
 				tailEnd.transform.position = swingPointInfo.transform.position;
 				isHooking = false;
 				isHooked = true;
+				isJumping = false;
 				currentTailLength = Mathf.Min ((swingPointInfo.transform.position - transform.position).magnitude, maxTailLength);
 
 				//set info for facingDir
@@ -618,33 +629,31 @@ public class PlayerActionsController : PlayerPhysicsController {
 
 	Vector3 GroundMovement (float deltaTime, Vector3 rawInputDir, float inputMag, Vector3 passedVelocity)
 	{
-		Vector3 localVelocity = groundPivot.InverseTransformDirection (passedVelocity);
+		Vector3 localVelocity = ExtVector3.InverseTransformDirection(groundInfo.up, passedVelocity);
 		Vector3 lateralVelocity =  new Vector3 (localVelocity.x, 0, localVelocity.z);
 		Vector3 savedVerticalVelocity = passedVelocity - lateralVelocity;
 
 
-		//set slope info
-
+		// Set slope info
 		float slopeAngle = 0;
 		SlopeInfo.SlopeType slopeType = SlopeInfo.SlopeType.None;
 		Vector3 slopeDir = Vector3.zero;
-		float downSlopeAcceleration = 0;
 		float downSlopeMod = 0;
 
 		if (!ignoreSlopePhysics) 
 		{
-			slopeAngle = Vector3.Angle (-gravityDir, groundPivot.up);
+			slopeAngle = Vector3.Angle (-gravityDir, groundInfo.up);
 			slopeType = SlopeInfo.GetSlopeType (slopeAngle);
-			slopeDir = groundPivot.InverseTransformDirection (gravityDir);
+			slopeDir = ExtVector3.InverseTransformDirection(groundInfo.up, gravityDir);
 			slopeDir.y = 0;
 			slopeDir = slopeDir.normalized;
 
-			downSlopeMod = 1 - Mathf.Max (0, ExtVector3.MagnitudeInDirection (groundPivot.up, -gravityDir));  //angles greater than 90 return 1
+			downSlopeMod = 1 - Mathf.Max (0, ExtVector3.MagnitudeInDirection (groundInfo.up, -gravityDir));  //angles greater than 90 return 1
 		}
 
 		if (SlopeInfo.IsSlopeSteepOrUp(slopeAngle) && slopeDir != Vector3.zero && inputMag <= walkInputTolerance)
         {
-			//we are walking and still inputting to walk, but we're on a steep slope, so make the input 0 because we can't walk on a steep slope
+			// We are walking and still inputting to walk, but we're on a steep slope, so make the input 0 because we can't walk on a steep slope
 			rawInputDir = Vector3.zero;
         }
 
@@ -654,16 +663,16 @@ public class PlayerActionsController : PlayerPhysicsController {
 
 
 
-		//check to see if should skid first
-		if (rawInputDir != Vector3.zero && (ExtVector3.Angle (rawInputDir, lateralVelocity.normalized) > 130) && (ExtVector3.Angle (rawInputDir, facingDir) > 130)) 
+		// Check to see if should skid first
+		if (rawInputDir != Vector3.zero && (ExtVector3.Angle (rawInputDir, lateralVelocity.normalized) > skidAngle) && (ExtVector3.Angle (rawInputDir, facingDir) > skidAngle)) 
 		{
-			//if (lateralVelocity.magnitude >= 2f)
+			//if (lateralVelocity.magnitude >= 6f)  is this necessary?
 			isSkidding = true;
 		}
 
 		bool isSkiddingDownSlope = false;
 
-		//check to see if we should stop skidding
+		// Check to see if we should stop skidding (and stop if so)
 		if (isSkidding) 
 		{
 			float skidDeceleration = (groundInfo.groundType == GroundType.Ice)? iceSkidDeceleration : normalSkidDeceleration;
@@ -673,8 +682,7 @@ public class PlayerActionsController : PlayerPhysicsController {
 			{
 				if (ExtVector3.MagnitudeInDirection (lateralVelocity, slopeDir) <= 0.00001f) 
 				{
-					//only stop skidding if going up or sideways to the slope
-
+					// Only stop skidding if going up or sideways to the slope
 					lateralVelocity = ExtVector3.CustomLerpVector (lateralVelocity, Vector3.zero, skidDeceleration, deltaTime, 0.3f, false);
 
 					if (Mathf.Approximately (lateralVelocity.magnitude, 0)) 
@@ -709,50 +717,43 @@ public class PlayerActionsController : PlayerPhysicsController {
 				float speedLimit = topSpeed;
 
 
-				//turn around straightaway if now inputting in direction moving backwards in
+				// Turn around straightaway if now inputting in direction moving backwards in
 				if (!Mathf.Approximately (lateralVelocity.magnitude, 0) && !IsMovingInFacingDir (lateralVelocity)) 
 				{
 					float angle = Vector3.Angle (facingDir, rawInputDir);
 
-					if (angle >= 110f && Vector3.Angle (facingDir, -lateralVelocity.normalized) < 0.01f) //give a little bit of leeway for 90 degrees
+					if (angle >= 110f && Vector3.Angle (facingDir, -lateralVelocity.normalized) < 0.01f) // Give a little bit of leeway for 90 degrees
 					{  
 						facingDir = lateralVelocity.normalized;
-						//facingDir = -facingDir;
 					}
 				}
 
 
-				//stuff to do if speed is 0
-
+				// Stuff to do if speed is 0
 				if (Mathf.Approximately (lateralVelocity.magnitude, 0)) 
 				{
-					if (SlopeInfo.IsSlopeSteepOrUp(slopeAngle) && slopeDir != Vector3.zero) //on a steep slope
+					if (SlopeInfo.IsSlopeSteepOrUp(slopeAngle) && slopeDir != Vector3.zero) // On a steep slope
 					{
-						playerInput.progressiveInput = rawInputDir;
 						lateralVelocity += 0.001f * facingDir;
 					} 
 					else 
 					{
-						playerInput.progressiveInput = rawInputDir;
 						lateralVelocity += 0.001f * rawInputDir.normalized;
 						facingDir = rawInputDir;
 					}
 				} 
 
 
-
-				float baseInputTurnSpeed = 12;
+				float baseInputTurnSpeed = groundTurnSpeed;
 				float inputTurnSpeed = (lateralVelocity.magnitude < 1f) ? 50 : baseInputTurnSpeed * 0.8f;
 
 				Vector3 targetDir = rawInputDir;
 
-				//limit the turning when going backwards down the slope
-
-				if (SlopeInfo.IsSlopeSteepOrUp(slopeAngle) && slopeDir != Vector3.zero)  //on a steep slope
+				// Limit the turning when going backwards down the slope
+				if (SlopeInfo.IsSlopeSteepOrUp(slopeAngle) && slopeDir != Vector3.zero)  // On a steep slope
 				{ 
 					if (!IsMovingInFacingDir (lateralVelocity)) 
 					{
-						
 						float angle = Vector3.SignedAngle (targetDir, -slopeDir, Vector3.up);
 						if (Mathf.Abs (angle) > 30) 
 						{
@@ -762,13 +763,13 @@ public class PlayerActionsController : PlayerPhysicsController {
 				}
 
 
-				//turn facing dir
+				// Turn facing dir
 				int dir = (IsMovingInFacingDir (lateralVelocity)) ? 1 : -1;
 				//facingDir = ExtVector3.CustomMoveTowardsAngleFromVector (facingDir, targetDir, inputTurnSpeed, deltaTime, Vector3.up, lateralVelocity).normalized;
 				//facingDir = ExtVector3.CustomLerpAngleFromVector(facingDir, targetDir, inputTurnSpeed, deltaTime, Vector3.up, 1f).normalized;
 				facingDir = TurnDirection(facingDir, targetDir, inputTurnSpeed, deltaTime, Vector3.up).normalized;
 
-				//turn velocity dir
+				// Turn velocity dir
 				float newTurnSpeed = (groundInfo.GetIsGrounded() && groundInfo.groundType == GroundType.Ice) ? iceTurnSpeed : inputTurnSpeed;
 				Vector3 originalLateralVelocity = lateralVelocity;
 				dir = (IsMovingInFacingDir (lateralVelocity)) ? 1 : -1;
@@ -782,22 +783,19 @@ public class PlayerActionsController : PlayerPhysicsController {
 				vMod = (Vector3.Lerp (lateralVelocity.normalized, rawInputDir, ((groundInfo.groundType == GroundType.Ice)? iceTurnSpeed : baseInputTurnSpeed * 0.6f) * deltaTime)).magnitude;
 
 				int direction = IsMovingInFacingDir(lateralVelocity)? 1 : -1;
-				bool hitWall = SetWallsInfo (facingDir * direction, true);
-				bool zeroedWall = false;
-			
+				VelocityAgainstWallsNormalsInfo info = SetWallsInfo(false, facingDir * direction, collisionInfo.wallPoints, groundInfo.up, gravityDir);
+				bool hitWall = info.infoSet;
 
-				//deal with walls
-
+				// Deal with walls
 				if (hitWall) 
 				{
 					vMod = 1;
 					Vector3 vBefore = lateralVelocity;
-					Vector3 wallNormal = GetWallNormalInDir (facingDir * direction).normalized;
+					Vector3 wallNormal = GetWallNormalInDir (info).normalized;
 
 					if (wallNormal == Vector3.zero) 
 					{
-						//v shape
-						zeroedWall = true;
+						// V-shape
 						lateralVelocity = Vector3.zero;
 						speedLimit = 0;
 
@@ -808,7 +806,7 @@ public class PlayerActionsController : PlayerPhysicsController {
 
 						float mod = 1 - ExtVector3.MagnitudeInDirection (facingDir * direction, -wallNormal, true);
 
-						if (Vector3.Angle (facingDir * direction, -wallNormal) <= wallAngleZeroAngle) 
+						if (Vector3.Angle (facingDir * direction, -wallNormal) <= GetWallAngleZero()) 
 						{
 							mod = 0;
 						}
@@ -817,16 +815,11 @@ public class PlayerActionsController : PlayerPhysicsController {
 						acceleration = acceleration * mod;
 					}
 
-					if (SlopeInfo.IsSlopeSteepOrUp(slopeAngle) && slopeDir != Vector3.zero) //on steep slope
+					if (SlopeInfo.IsSlopeSteepOrUp(slopeAngle) && slopeDir != Vector3.zero) // On steep slope
 					{
-						direction = IsMovingInFacingDir(lateralVelocity)? 1 : -1;
-						if (Vector3.Angle (slopeDir, -wallNormal) <= wallAngleZeroAngle || Vector3.Angle (lateralVelocity.normalized, slopeDir) > 90) 
-						{
-							
-						} 
-						else 
-						{
-							//no speed limit in this situation
+						if (Vector3.Angle(slopeDir, -wallNormal) > GetWallAngleZero() && Vector3.Angle(lateralVelocity.normalized, slopeDir) < 90)
+                        {
+							// No speed limit in this situation
 							speedLimit = topSpeed;
 							vMod = 1;
 							acceleration = (groundInfo.groundType == GroundType.Ice) ? iceAcceleration : normalAcceleration;
@@ -838,23 +831,23 @@ public class PlayerActionsController : PlayerPhysicsController {
 
 				if (!Mathf.Approximately (lateralVelocity.magnitude, 0)) 
 				{
-					//accelerate
+					// Accelerate
 
 					dir = (IsMovingInFacingDir (lateralVelocity)) ? 1 : -1;
-					acceleration = acceleration * ((dir == -1) ? 1.6f : 1);  //increase it a little for trying to regain forward direction 
+					acceleration = acceleration * ((dir == -1) ? 1.6f : 1);  // Increase it a little for trying to regain forward direction 
 
-					if (dir == -1 && ExtVector3.MagnitudeInDirection (lateralVelocity, slopeDir) > 0.0001f ) //if facing forwards but moving backwards down slope 
+					if (dir == -1 && ExtVector3.MagnitudeInDirection (lateralVelocity, slopeDir) > 0.0001f ) // If facing forwards but moving backwards down slope 
 					{
 						float rawInputAgainstSlope = Vector3.Angle (rawInputDir, -slopeDir);
-						if (rawInputAgainstSlope > 45 && SlopeInfo.IsSlopeSteepOrUp(slopeAngle) && slopeDir != Vector3.zero) //and slope is steep and angle is this
+						if (rawInputAgainstSlope > 45 && SlopeInfo.IsSlopeSteepOrUp(slopeAngle) && slopeDir != Vector3.zero) // and slope is steep and angle is this
 						{
-							//you cannot regain speed forwards unless you input up the slope, so make it accelerate down the slope instead
+							// Cannot regain speed forwards unless you input up the slope, so make it accelerate down the slope instead
 							acceleration = -(acceleration + slopeAdditionalAcceleration * downSlopeMod * ExtVector3.MagnitudeInDirection (lateralVelocity.normalized, slopeDir)) * 0.8f;
 							vMod = 1;
 						} 
 						else 
 						{
-							//this is to keep it consistent to that trying to regain forward direction when going backwards is the same for any backwards angle
+							// This is to keep it consistent to that trying to regain forward direction when going backwards is the same for any backwards angle
 							acceleration = acceleration + slopeAdditionalAcceleration * downSlopeMod * -1;
 						}
 					} 
@@ -870,7 +863,7 @@ public class PlayerActionsController : PlayerPhysicsController {
 
 					bool belowWalkSpeed = (Mathf.Abs(currentSpeed) < walkSpeed || Mathf.Approximately (Mathf.Abs(currentSpeed), walkSpeed));
 
-					//accelerate and speed limit stuff
+					// Accelerate and speed limit stuff
 					if (dir == 1) 
 					{
 						if (currentSpeed < speedLimit) 
@@ -881,7 +874,7 @@ public class PlayerActionsController : PlayerPhysicsController {
 						{
 							if (speedLimit == topSpeed)
                             {
-								speedLimit = maxSpeed;
+								speedLimit = GetMaxSpeed();
                             }
 
 							if (currentSpeed > speedLimit)
@@ -900,7 +893,7 @@ public class PlayerActionsController : PlayerPhysicsController {
 					} 
 					else 
 					{
-						if (speedLimit < topSpeed) //if a limit exists
+						if (speedLimit < topSpeed) // If a limit exists
 						{
 							if (groundInfo.groundType == GroundType.Ice) 
 							{
@@ -927,68 +920,61 @@ public class PlayerActionsController : PlayerPhysicsController {
 
 					if (belowWalkSpeed && (inputMag <= walkInputTolerance))
                     {
-						//we should only walk, unless we were already running then it doesn't matter
-
+						// We should only walk, unless we were already running then it doesn't matter
 						newSpeed = Mathf.Min(newSpeed, walkSpeed);
-
-						//Debug.Log("Walk!");
                     }
 
 
 
-					//factor in the turning speed mod
+					// Apply the turning speed mod
 					float minSpeedAfterMod = 4;
 					if (Mathf.Abs (newSpeed) > minSpeedAfterMod) 
 					{
 						newSpeed = newSpeed * Mathf.Pow (vMod, 1.6f);
 
+						// Stops the speed going below a minimum speed after applying
 						if (Mathf.Abs (newSpeed) < minSpeedAfterMod) 
 						{
 							newSpeed = minSpeedAfterMod * dir;
 						}
 					}
 
-
 					lateralVelocity = newSpeed * lateralVelocity.normalized * dir; //direction cannot change
 				}
-			}
-
-
-				
-
+			}	
 		} 
 		else 
 		{
-			//no input
+			// No input
 
 			float turnToSlopeSpeed = 8;
 
 			if (SlopeInfo.IsSlopeSteepOrUp(slopeAngle)) 
 			{
-				if (slopeDir != Vector3.zero) //could be a perfectly flat ceiling
+				if (slopeDir != Vector3.zero) // Could be a perfectly flat ceiling
 				{
 					float velocityToSlopeDir = Vector3.Angle (lateralVelocity.normalized, slopeDir);
 
 					if (velocityToSlopeDir <= 110) 
 					{
-						//speed is down slope or slightly up it
+						// Speed is down slope or slightly up it
 
 						float facingToSlopeDir = Vector3.Angle (facingDir, slopeDir);
 
 						if (facingToSlopeDir > 90.0001f) 
 						{
-							//facing up slope
+							// Facing up slope
 
 							int dir = -1;
 
 							if (velocityToSlopeDir < 90) 
 							{
-								//going down or sideways
+								// Going down or sideways
 								facingDir = ExtVector3.CustomLerpAngleFromVector (facingDir, -slopeDir, turnToSlopeSpeed, deltaTime, Vector3.up, 1f).normalized;
 							} 
 							else 
 							{
-								//going slightly up
+								// Going slightly up
 								facingDir = ExtVector3.CustomLerpAngleFromVector (facingDir, slopeDir, turnToSlopeSpeed, deltaTime, Vector3.up, 1f).normalized;
 								dir = 1;
 							}
@@ -1007,7 +993,7 @@ public class PlayerActionsController : PlayerPhysicsController {
 						} 
 						else 
 						{
-							//facing sideways or down slope
+							// Facing sideways or down slope
 
 							if (IsMovingInFacingDir (lateralVelocity)) 
 							{
@@ -1031,19 +1017,18 @@ public class PlayerActionsController : PlayerPhysicsController {
 						}
 
 						int direction = IsMovingInFacingDir(lateralVelocity)? 1 : -1;
-						bool hitWall = SetWallsInfo (facingDir * direction, true);
-						bool zeroedWall = false;
+						VelocityAgainstWallsNormalsInfo info = SetWallsInfo(false, facingDir * direction, collisionInfo.wallPoints, groundInfo.up, gravityDir);
+						bool hitWall = info.infoSet;
 						float speedLimit = topSpeed;
 
 						if (hitWall) 
 						{
 							Vector3 vBefore = lateralVelocity;
-							Vector3 wallNormal = GetWallNormalInDir (facingDir * direction).normalized;
+							Vector3 wallNormal = GetWallNormalInDir (info).normalized;
 
 							if (wallNormal == Vector3.zero) 
 							{
-								//v shape
-								zeroedWall = true;
+								// V-shape
 								lateralVelocity = Vector3.zero;
 								speedLimit = 0;
 
@@ -1054,7 +1039,7 @@ public class PlayerActionsController : PlayerPhysicsController {
 
 								float mod = 1 - ExtVector3.MagnitudeInDirection (facingDir * direction, -wallNormal, true);
 
-								if (Vector3.Angle (facingDir * direction, -wallNormal) <= wallAngleZeroAngle) 
+								if (Vector3.Angle (facingDir * direction, -wallNormal) <= GetWallAngleZero()) 
 								{
 									mod = 0;
 								}
@@ -1063,7 +1048,7 @@ public class PlayerActionsController : PlayerPhysicsController {
 							}
 
 							float speed = lateralVelocity.magnitude;
-							if (speed > speedLimit && Vector3.Angle (slopeDir, -wallNormal) <= wallAngleZeroAngle && speedLimit != topSpeed) 
+							if (speed > speedLimit && Vector3.Angle (slopeDir, -wallNormal) <= GetWallAngleZero() && speedLimit != topSpeed) 
 							{
 								speed = speedLimit;
 							}
@@ -1074,9 +1059,9 @@ public class PlayerActionsController : PlayerPhysicsController {
 					}
 					else 
 					{
-						//going up the slope
+						// Going up the slope
 
-						//Decelerate quicker
+						// Decelerate quicker
 						deceleration = deceleration + slopeAdditionalDeceleration * downSlopeMod * ExtVector3.MagnitudeInDirection (lateralVelocity.normalized, -slopeDir);
 						lateralVelocity = ExtVector3.CustomLerpVector (lateralVelocity, Vector3.zero, deceleration, deltaTime, 0.4f, false);
 					}
@@ -1084,38 +1069,31 @@ public class PlayerActionsController : PlayerPhysicsController {
 				}
 				else 
 				{
-					//Decelerate normally on ceiling
+					// Decelerate normally on ceiling
 					deceleration = deceleration + slopeAdditionalDeceleration * downSlopeMod * ExtVector3.MagnitudeInDirection (lateralVelocity.normalized, -slopeDir);
 					lateralVelocity = ExtVector3.CustomLerpVector (lateralVelocity, Vector3.zero, deceleration, deltaTime, 0.2f, false);
 				}
 			}
 			else 
 			{
-				//Decelerate normally
+				// Decelerate normally
 				deceleration = deceleration + slopeAdditionalDeceleration * downSlopeMod * ExtVector3.MagnitudeInDirection (lateralVelocity.normalized, -slopeDir);
 				lateralVelocity = ExtVector3.CustomLerpVector (lateralVelocity, Vector3.zero, deceleration, deltaTime, 0.2f, false);
 			}
-
-
-
 		}
 
 
 
-		//fall off wall if speed too low
+		// Fall off wall if speed too low
 		if (slopeType == SlopeInfo.SlopeType.SuperSteep) 
 		{
-			if ((slopeDir == Vector3.zero && lateralVelocity.magnitude < stickToSlopeThreshold) || (ExtVector3.MagnitudeInDirection (lateralVelocity, -slopeDir, true) >= -0.0001f && lateralVelocity.magnitude < stickToSlopeThreshold)) 
+			float minStickSpeed = CollisionController.GetFallOffSlopeSpeedThreshold();
+			if ((slopeDir == Vector3.zero && lateralVelocity.magnitude < minStickSpeed) || (ExtVector3.MagnitudeInDirection (lateralVelocity, -slopeDir, true) >= -0.0001f && lateralVelocity.magnitude < minStickSpeed)) 
 			{
-				Vector3 globalVelocity = groundPivot.TransformDirection (lateralVelocity + savedVerticalVelocity);
-
 				SetGrounded (false);
-				groundPivot.transform.rotation = Quaternion.FromToRotation (Vector3.up, -gravityDir);
 
-
-				localVelocity = groundPivot.InverseTransformDirection (passedVelocity);
+				localVelocity = ExtVector3.InverseTransformDirection(groundInfo.up, passedVelocity);
 				lateralVelocity =  new Vector3 (localVelocity.x, 0, localVelocity.z);
-				savedVerticalVelocity = passedVelocity - lateralVelocity;
 			}
 
 		}
@@ -1127,7 +1105,7 @@ public class PlayerActionsController : PlayerPhysicsController {
 		}*/
 
 		localVelocity = new Vector3 (lateralVelocity.x, localVelocity.y, lateralVelocity.z);
-		passedVelocity = groundPivot.TransformDirection (localVelocity);
+		passedVelocity = ExtVector3.TransformDirection(groundInfo.up, localVelocity);
 
 		return passedVelocity;
 	}
@@ -1136,22 +1114,19 @@ public class PlayerActionsController : PlayerPhysicsController {
 
 	Vector3 AirMovement (float deltaTime, Vector3 rawInputDir, Vector3 passedVelocity)
 	{
-		Vector3 localVelocity = groundPivot.InverseTransformDirection (passedVelocity);
+		Vector3 localVelocity = ExtVector3.InverseTransformDirection(groundInfo.up, passedVelocity);
 		Vector3 lateralVelocity =  new Vector3 (localVelocity.x, 0, localVelocity.z);
 		Vector3 savedVerticalVelocity = passedVelocity - lateralVelocity;
-
-
-		isSkidding = false;
 
 		float acceleration = normalAcceleration;
 
 		if (rawInputDir != Vector3.zero) 
 		{
-			float baseInputTurnSpd = 14;
+			float baseInputTurnSpd = airTurnSpeed;
 			float inputTurnSpd;
 
 
-			//turn around straightaway if now inputting in direction moving backwards in
+			// Turn around straightaway if now inputting in direction moving backwards in
 			if (!Mathf.Approximately(lateralVelocity.magnitude, 0) && !IsMovingInFacingDir(lateralVelocity))
 			{
 				float angle = Vector3.Angle(facingDir, rawInputDir);
@@ -1159,55 +1134,60 @@ public class PlayerActionsController : PlayerPhysicsController {
 				if (angle > 90f) 
 				{
 					facingDir = lateralVelocity.normalized;
-					//facingDir = -facingDir;
 				}
 			}
 
-			//stuff to do if speed is 0
-
+			// Stuff to do if speed is 0
 			if (Mathf.Approximately(lateralVelocity.magnitude, 0))
 			{
-				lateralVelocity += 0.1f * facingDir;
+				lateralVelocity += 0.001f * rawInputDir.normalized;
+				facingDir = rawInputDir;
 			}
 
+			// Decelerating backwards is like skidding but without input locking
+			bool deceleratingBackwards = IsMovingInFacingDir(lateralVelocity) && (Vector3.Angle(facingDir.normalized, rawInputDir) > skidAngle) && (Vector3.Angle(lateralVelocity.normalized, rawInputDir) > skidAngle);
 
-			inputTurnSpd = (Vector3.Angle (facingDir.normalized, rawInputDir) > 100) ? baseInputTurnSpd / 3 : baseInputTurnSpd;
-			facingDir = ExtVector3.CustomLerpAngleFromVector (facingDir, rawInputDir.normalized, inputTurnSpd, deltaTime, Vector3.up, 1f).normalized;
-
-
-			inputTurnSpd = (Vector3.Angle (lateralVelocity.normalized, rawInputDir) > 100) ? baseInputTurnSpd / 3 : baseInputTurnSpd;
 			float vMod = 1;
 
-			if (ExtVector3.MagnitudeInDirection (lateralVelocity, facingDir) < 0 && ExtVector3.MagnitudeInDirection (rawInputDir, facingDir) > 0) 
-			{
-				Vector3 newV = ExtVector3.CustomLerpVector (lateralVelocity.normalized, rawInputDir.normalized, inputTurnSpd, deltaTime, 0.1f, false);
-				lateralVelocity = newV * lateralVelocity.magnitude;
+			if (!deceleratingBackwards)
+            {
+				// Turn facing dir
+				inputTurnSpd = baseInputTurnSpd;
+				facingDir = ExtVector3.CustomLerpAngleFromVector(facingDir, rawInputDir.normalized, inputTurnSpd, deltaTime, Vector3.up, 1f).normalized;
 
-				vMod = (Vector3.Lerp (lateralVelocity.normalized, rawInputDir, 12 * deltaTime)).magnitude;
-			} 
-			else 
-			{
-				Vector3 newV = ExtVector3.CustomLerpAngleFromVector (lateralVelocity.normalized, rawInputDir.normalized, inputTurnSpd, deltaTime, Vector3.up, 1f);
-				lateralVelocity = newV.normalized * lateralVelocity.magnitude;
+				// Turn velocity dir
+				if (ExtVector3.MagnitudeInDirection(lateralVelocity, facingDir) < 0 && ExtVector3.MagnitudeInDirection(rawInputDir, facingDir) > 0)
+				{
+					Vector3 newV = ExtVector3.CustomLerpVector(lateralVelocity.normalized, rawInputDir.normalized, inputTurnSpd, deltaTime, 0.1f, false);
+					lateralVelocity = newV * lateralVelocity.magnitude;
 
-				vMod = (Vector3.Lerp (lateralVelocity.normalized, rawInputDir, 12 * deltaTime)).magnitude;
+					vMod = (Vector3.Lerp(lateralVelocity.normalized, rawInputDir, 12 * deltaTime)).magnitude;
+				}
+				else
+				{
+					Vector3 newV = ExtVector3.CustomLerpAngleFromVector(lateralVelocity.normalized, rawInputDir.normalized, inputTurnSpd, deltaTime, Vector3.up, 1f);
+					lateralVelocity = newV.normalized * lateralVelocity.magnitude;
+
+					vMod = (Vector3.Lerp(lateralVelocity.normalized, rawInputDir, 12 * deltaTime)).magnitude;
+				}
 			}
 
+			
 
-			bool hitWall = SetWallsInfo (facingDir, true);
-			bool zeroedWall = false;
+			// Deal with walls
+			VelocityAgainstWallsNormalsInfo info = SetWallsInfo(false, facingDir, collisionInfo.wallPoints, groundInfo.up, gravityDir);
+			bool hitWall = info.infoSet;
 			float speedLimit = topSpeed;
 
 			if (hitWall) 
 			{
 				vMod = 1;
 				Vector3 vBefore = lateralVelocity;
-				Vector3 wallNormal = GetWallNormalInDir (facingDir).normalized;
+				Vector3 wallNormal = GetWallNormalInDir (info).normalized;
 
 				if (wallNormal == Vector3.zero) 
 				{
-					//v shape
-					zeroedWall = true;
+					// V-shape
 					lateralVelocity = Vector3.zero;
 					speedLimit = 0;
 
@@ -1218,7 +1198,7 @@ public class PlayerActionsController : PlayerPhysicsController {
 
 					float mod = 1 - ExtVector3.MagnitudeInDirection (facingDir, -wallNormal, true);
 
-					if (Vector3.Angle (facingDir, -wallNormal) <= wallAngleZeroAngle) 
+					if (Vector3.Angle (facingDir, -wallNormal) <= GetWallAngleZero()) 
 					{
 						mod = 0;
 					}
@@ -1226,77 +1206,83 @@ public class PlayerActionsController : PlayerPhysicsController {
 					speedLimit = speedLimit * Mathf.Pow (mod, 1.2f);
 					acceleration = acceleration * mod;
 				}
-
 			}
 
 
 			if (!Mathf.Approximately (lateralVelocity.magnitude, 0)) 
 			{
-				//accelerate
-				int dir = (IsMovingInFacingDir (lateralVelocity))? 1 : -1;
-				acceleration = acceleration * ((dir == -1) ? 1 : 1);  //increase it a little for trying to regain forward direction 
+				if (!deceleratingBackwards)
+                {
+					// Accelerate
+					int dir = (IsMovingInFacingDir(lateralVelocity)) ? 1 : -1;
+					acceleration = acceleration * ((dir == -1) ? 1 : 1);  // Can be modified for regaining the forward direction
 
-				float currentSpeed = lateralVelocity.magnitude * dir;
-				float newSpeed = currentSpeed;
+					float currentSpeed = lateralVelocity.magnitude * dir;
+					float newSpeed = currentSpeed;
 
-				//accelerate and speed limit stuff
-				if (dir == 1) 
-				{
-					if (currentSpeed < speedLimit) 
+					// Accelerate and speed limit stuff
+					if (dir == 1)
 					{
-						newSpeed = Mathf.Min (currentSpeed + acceleration * deltaTime, speedLimit);
-					} 
-					else 
-					{
-						if (speedLimit == topSpeed)
-                        {
-							speedLimit = maxSpeed;
-                        }
-
-						if (currentSpeed > speedLimit)
-                        {
-							newSpeed = speedLimit;
+						if (currentSpeed < speedLimit)
+						{
+							newSpeed = Mathf.Min(currentSpeed + acceleration * deltaTime, speedLimit);
 						}
-						
-					}
-				} 
-				else 
-				{
-					if (Mathf.Abs (currentSpeed) < speedLimit) 
-					{
-						newSpeed = Mathf.Max (currentSpeed + acceleration * deltaTime, -speedLimit);
-					} 
-					else 
-					{
-						if (speedLimit == topSpeed)
-                        {
-							speedLimit = maxSpeed;
-                        }
+						else
+						{
+							if (speedLimit == topSpeed)
+							{
+								speedLimit = GetMaxSpeed();
+							}
 
-						if (currentSpeed < -speedLimit)
-                        {
-							newSpeed = -speedLimit;
+							// Stop speed exceeding speed limit
+							if (currentSpeed > speedLimit)
+							{
+								newSpeed = speedLimit;
+							}
+
 						}
-						
 					}
-				}
-
-
-				//factor in the turning speed mod
-				float minSpeedAfterMod = 0;
-				if (Mathf.Abs(newSpeed) > minSpeedAfterMod && dir == 1) 
-				{
-					newSpeed = newSpeed * Mathf.Pow (vMod, 1.6f);
-
-					if (Mathf.Abs (newSpeed) < minSpeedAfterMod) 
+					else
 					{
-						newSpeed = minSpeedAfterMod * dir;
+						if (Mathf.Abs(currentSpeed) < speedLimit)
+						{
+							newSpeed = Mathf.Max(currentSpeed + acceleration * deltaTime, -speedLimit);
+						}
+						else
+						{
+							if (speedLimit == topSpeed)
+							{
+								speedLimit = GetMaxSpeed();
+							}
+
+							// Stop speed exceeding speed limit
+							if (currentSpeed < -speedLimit)
+							{
+								newSpeed = -speedLimit;
+							}
+						}
 					}
+
+					// Apply turning speed mod
+					float minSpeedAfterMod = 0;
+					if (Mathf.Abs(newSpeed) > minSpeedAfterMod && dir == 1)
+					{
+						newSpeed = newSpeed * Mathf.Pow(vMod, 1.6f);
+
+						// Stops speed going below a minimum speed after applying
+						if (Mathf.Abs(newSpeed) < minSpeedAfterMod)
+						{
+							newSpeed = minSpeedAfterMod * dir;
+						}
+					}
+
+					lateralVelocity = newSpeed * lateralVelocity.normalized * dir;
 				}
-
-
-
-				lateralVelocity = newSpeed * lateralVelocity.normalized * dir;
+				else
+                {
+					// Decelerate to 0
+					lateralVelocity = ExtVector3.CustomLerpVector(lateralVelocity, Vector3.zero, airBackwardsDeceleration, deltaTime, 0.3f, false);
+				}		
 			}
 
 		} 
@@ -1304,7 +1290,7 @@ public class PlayerActionsController : PlayerPhysicsController {
 		{
 			//Decelerate
 
-			if (!leavingGround) //this is done so that if we are trying to walk off a platform very slowly we will keep enough speed to move over the edge before the gravity gets too high
+			if (!leavingGround || true) //this is done so that if we are trying to walk off a platform very slowly we will keep enough speed to move over the edge before the gravity gets too high
 			{
 				//lateralVelocity = ExtVector3.CustomLerpVector (lateralVelocity, Vector3.zero, airDeceleration, deltaTime, 0.2f, false);
 				float speed = lateralVelocity.magnitude;
@@ -1324,7 +1310,7 @@ public class PlayerActionsController : PlayerPhysicsController {
 		}*/
 
 		localVelocity = new Vector3 (lateralVelocity.x, localVelocity.y, lateralVelocity.z);
-		passedVelocity = groundPivot.TransformDirection (localVelocity);
+		passedVelocity = ExtVector3.TransformDirection(groundInfo.up, localVelocity);
 
 		return passedVelocity;
 	}
@@ -1388,16 +1374,16 @@ public class PlayerActionsController : PlayerPhysicsController {
 
 	void Jump (float deltaTime) 
 	{
-		
-		if(groundInfo.canJump && input.GetButtonDown("Jump") && !isJumping)
+		if(groundInfo.canJump && input.GetButtonDown(GeneralInput.AxesNames.Jump) && !isJumping)
 		{
 			isJumping = true;
+			justStartedJumping = true;
 			groundInfo.canJump = false;
 			currentlyUsingBooster = false;
 			if (cUseGroundBooster != null)
 				StopCoroutine (cUseGroundBooster);
 
-			Vector3 prevUp = groundPivot.up;
+			Vector3 prevUp = groundInfo.up;
 
 			Vector3 velocityToUseForCheck = velocity;
 			//0 the velocity in the vertical direction is moving downwards so that a jump still gives the full height it should
@@ -1410,23 +1396,28 @@ public class PlayerActionsController : PlayerPhysicsController {
 			if (groundInfo.GetIsGrounded()) 
 			{
 				float slopeAngle = 0;
-				Vector3 slopeDir = groundPivot.up;
+				Vector3 slopeDir = groundInfo.up;
 				SlopeInfo.SlopeType slopeType = SlopeInfo.SlopeType.None;
 
 				if (!ignoreSlopePhysics) 
 				{
-					slopeAngle = Vector3.Angle (-gravityDir, groundPivot.up);
+					slopeAngle = Vector3.Angle (-gravityDir, groundInfo.up);
 					slopeType = SlopeInfo.GetSlopeType (slopeAngle);
-					slopeDir = groundPivot.InverseTransformDirection (gravityDir);
+					slopeDir = ExtVector3.InverseTransformDirection(groundInfo.up, gravityDir);
 					slopeDir.y = 0;
 					slopeDir = slopeDir.normalized;
 
 				}
 
-				Vector3 localVelocity = groundPivot.InverseTransformDirection (velocityToUseForCheck);
+				Vector3 localVelocity = ExtVector3.InverseTransformDirection(groundInfo.up, velocityToUseForCheck);
 				Vector3 lateral = new Vector3 (localVelocity.x, 0, localVelocity.z);
 
-				if (slopeAngle == 0) 
+				if (groundInfo.GetIsOnStaircase())
+                {
+					// Do a normal jump with no momentum altering
+					velocity += -gravityDir * jumpPower;
+                }
+				else if (slopeAngle == 0) 
 				{
 					//flat ground
 					velocity += -gravityDir * jumpPower;
@@ -1439,7 +1430,7 @@ public class PlayerActionsController : PlayerPhysicsController {
 					} 
 					else 
 					{
-						velocity += groundPivot.up * jumpPower;
+						velocity += groundInfo.up * jumpPower;
 					}
 				}
 				else if (slopeAngle <= 90.01f) 
@@ -1450,13 +1441,13 @@ public class PlayerActionsController : PlayerPhysicsController {
 
 						float maxAdditionalVelocity = 2.5f;
 						velocityAgainstGravityDir = Mathf.Min (maxAdditionalVelocity, velocityAgainstGravityDir);
-						velocityAgainstGravityDir = (1 - ExtVector3.MagnitudeInDirection (groundPivot.up, -gravityDir)) * velocityAgainstGravityDir;
+						velocityAgainstGravityDir = (1 - ExtVector3.MagnitudeInDirection (groundInfo.up, -gravityDir)) * velocityAgainstGravityDir;
 
 						velocity += -gravityDir * jumpPower;
 
 
 						//0 velocity in slope direction
-						Vector3 flattenedSlopeDir = Vector3.ProjectOnPlane (groundPivot.TransformDirection (slopeDir), gravityDir);
+						Vector3 flattenedSlopeDir = Vector3.ProjectOnPlane(ExtVector3.TransformDirection (groundInfo.up, slopeDir), gravityDir);
 						velocity = Vector3.ProjectOnPlane (velocity, flattenedSlopeDir);
 
 						//set height to jumppower + additional velocity from speed
@@ -1466,13 +1457,13 @@ public class PlayerActionsController : PlayerPhysicsController {
 					else 
 					{
 						
-						velocity += groundPivot.up * jumpPower;
+						velocity += groundInfo.up * jumpPower;
 					}
 				}
 				else if (SlopeInfo.IsSlopeSteepOrUp (slopeAngle) && slopeDir == Vector3.zero)
 				{
 					//ceiling
-					velocity += groundPivot.up * jumpPower;
+					velocity += groundInfo.up * jumpPower;
 				}
 				else 
 				{
@@ -1480,10 +1471,10 @@ public class PlayerActionsController : PlayerPhysicsController {
 					if (ExtVector3.MagnitudeInDirection (lateral.normalized, -slopeDir) > -0.0001f) 
 					{
 						//0 velocity in slope direction
-						Vector3 flattenedSlopeDir = Vector3.ProjectOnPlane (groundPivot.TransformDirection (slopeDir), gravityDir);
+						Vector3 flattenedSlopeDir = Vector3.ProjectOnPlane(ExtVector3.TransformDirection (groundInfo.up, slopeDir), gravityDir);
 						velocity = Vector3.ProjectOnPlane (velocity, flattenedSlopeDir);
 
-						velocity += groundPivot.up * jumpPower;
+						velocity += groundInfo.up * jumpPower;
 
 
 
@@ -1493,7 +1484,7 @@ public class PlayerActionsController : PlayerPhysicsController {
 						Vector3 flattenedSlopeDir = Vector3.ProjectOnPlane (slopeDir, gravityDir);
 						velocity = Vector3.ProjectOnPlane (velocity, flattenedSlopeDir);
 
-						velocity += groundPivot.up * jumpPower;
+						velocity += groundInfo.up * jumpPower;
 
 					}
 				}
@@ -1505,12 +1496,10 @@ public class PlayerActionsController : PlayerPhysicsController {
 			}
 
 			SetGrounded(false);
-			groundPivot.rotation =  Quaternion.FromToRotation (Vector3.up, -gravityDir);
-
 
 			Vector3 dirToAdd = -gravityDir;
 
-			Vector3 lateralVelocity = groundPivot.InverseTransformDirection (velocity);
+			Vector3 lateralVelocity = ExtVector3.InverseTransformDirection(groundInfo.up, velocity);
 			lateralVelocity.y = 0;
 			//SetNewFacingDir (lateralVelocity);
 
@@ -1525,7 +1514,7 @@ public class PlayerActionsController : PlayerPhysicsController {
 		float jumpingTimer = 0;
 		float jumpForce = 20; //increasing this value increases the distance gap between heights
 
-		while (isJumping && input.GetPressed("Jump") && jumpingTimer <= 0.6f && ExtVector3.IsInDirection (velocity, -gravityDir)) 
+		while (isJumping && input.GetPressed(GeneralInput.AxesNames.Jump) && jumpingTimer <= 0.6f && ExtVector3.IsInDirection (velocity, -gravityDir)) 
 		{
 			while (sc.gamePaused || sc.gameController.frameByFrame) 
 			{
@@ -1592,10 +1581,10 @@ public class PlayerActionsController : PlayerPhysicsController {
 			}
 
 			Vector3 boosterVelocity = boosterController.GetVelocity ();
-			Vector3 boosterDir = Vector3.ProjectOnPlane (boosterVelocity.normalized, groundPivot.up);
-			Vector3 vertical = velocity - Vector3.ProjectOnPlane (velocity, groundPivot.up);
+			Vector3 boosterDir = Vector3.ProjectOnPlane (boosterVelocity.normalized, groundInfo.up);
+			Vector3 vertical = velocity - Vector3.ProjectOnPlane (velocity, groundInfo.up);
 			velocity = boosterDir * boosterVelocity.magnitude;
-			facingDir = groundPivot.InverseTransformDirection (velocity).normalized;
+			facingDir = ExtVector3.InverseTransformDirection(groundInfo.up, velocity).normalized;
 			velocity += vertical;
 
 			boostTimer += Time.deltaTime;
@@ -1628,7 +1617,7 @@ public class PlayerActionsController : PlayerPhysicsController {
 			Vector3 boosterVelocity = boosterController.GetVelocity ();
 			Vector3 boosterDir = boosterVelocity.normalized;
 			velocity = boosterDir * boosterVelocity.magnitude;
-			Vector3 local = groundPivot.InverseTransformDirection (velocity);
+			Vector3 local = ExtVector3.InverseTransformDirection(groundInfo.up, velocity);
 			local.y = 0;
 
 			if (Vector3.Angle (-gravityDir, boosterDir.normalized) > 0.01f && Vector3.Angle (gravityDir, boosterDir.normalized) > 0.01f) //this is just so it doesnt change the facing direction to the wrong way when the direction is perfectly vertical 
@@ -1677,7 +1666,7 @@ public class PlayerActionsController : PlayerPhysicsController {
 			Vector3 boosterVelocity = springController.GetVelocity ();
 			Vector3 boosterDir = boosterVelocity.normalized;
 			velocity = boosterDir * boosterVelocity.magnitude;
-			Vector3 local = groundPivot.InverseTransformDirection (velocity);
+			Vector3 local = ExtVector3.InverseTransformDirection(groundInfo.up, velocity);
 			local.y = 0;
 
 			if (Vector3.Angle (-gravityDir, boosterDir.normalized) > 0.01f && Vector3.Angle (gravityDir, boosterDir.normalized) > 0.01f) //this is just so it doesnt change the facing direction to the wrong way when the direction is perfectly vertical 
@@ -1740,19 +1729,27 @@ public class PlayerActionsController : PlayerPhysicsController {
 
 		if (moveTowardsAngle < lerpAngle)
         {
-			//Debug.Log("used!");
 			return moveTowardsRes;
         }
 
 		return lerpRes;
     }
-		
+
+
+	public override void PauseAnimator()
+	{
+		pgc.PauseAnimator();
+	}
+
+	public override void UnPauseAnimator()
+	{
+		pgc.UnPauseAnimator();
+	}
 
 
 
 
-
-	void DebugMove() 
+	void DebugMove(Vector3 inputDir) 
 	{
 		currentlyUsingBooster = false;
 		currentlyUsingSpring = false;
@@ -1761,16 +1758,14 @@ public class PlayerActionsController : PlayerPhysicsController {
 		velocity = Vector3.zero; //reset the normal velocity to 0 so we don't keep moving using the pre-debug vector after
 		float moveSpeed = 8;
 
-		Vector3 inputDir = new Vector3(Input.GetAxisRaw("Horizontal"), 0f, Input.GetAxisRaw("Vertical")).normalized;
-
 		if(inputDir != Vector3.zero)
 		{
 			inputDir = transform.TransformDirection (inputDir);
 			toMove += inputDir * moveSpeed;
 		}
 
-		if (Input.GetKey (KeyCode.Space)) {toMove += moveSpeed * Vector3.up;}
-		else if (Input.GetKey (KeyCode.LeftShift)) {toMove += moveSpeed * -Vector3.up;}
+		if (input.GetRawInput(GeneralInput.AxesNames.DebugMoveVertical) > 0) {toMove += moveSpeed * Vector3.up;}
+		else if (input.GetRawInput(GeneralInput.AxesNames.DebugMoveVertical) < 0) {toMove += moveSpeed * -Vector3.up;}
 
 		transform.position += toMove * Time.deltaTime;
 	}

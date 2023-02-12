@@ -94,8 +94,72 @@ public static class SphereCollisionDetect {
 		return resultBuffer;
 	}
 
+	public static WallDepenInfo Depenetrate(ref List<GroundCastInfo> collisionPoints, Vector3 originalOrigin, float sphereRadius, float extraDepenetrationDistance, Vector3 velocity, Vector3 gravityDir, Vector3 transformUp, bool isGrounded, int maxIterations = 10)
+	{
+		WallDepenInfo wallInfo = new ();
 
-	public static PlayerPhysicsController.DepenetrationInfo Depenetrate (PlayerPhysicsController ppc, List<SphereCollisionInfo> collisionPoints, Vector3 velocity, int maxIterations = 4)
+		if (collisionPoints.Count > 0 && maxIterations > 0)
+		{
+			Vector3 depenetrationVelocity = Vector3.zero;
+			List<CollisionPointInfo> collisionPointsInfo = new List<CollisionPointInfo>();
+
+			int counter = 0;
+
+			//Since with each iteration we are using old collision data, higher maxIterations does not mean more accuracy. You will need to tune it to your liking.
+			for (int i = 0; i < maxIterations; i++)
+			{
+				counter++;
+
+				bool depenetrated = false;
+				for (int j = 0; j < collisionPoints.Count; j++)
+				{
+					GroundCastInfo info = collisionPoints[j];
+
+					if (info.wallActingAsFloor)
+                    {
+						// We dont want to use these for velocity limiting but not depenetration
+						continue;
+					}
+
+					Vector3 detectOriginOffset = wallInfo.totalDepenetration + depenetrationVelocity + originalOrigin;
+
+					// Only depenetrate if the point is inside the sphere
+					if ((detectOriginOffset - info.point).magnitude > sphereRadius) continue;
+
+					if (i == 10)
+                    {
+						// Use this from now on to stop getting stuck if we are stuck inside a v shape etc
+						collisionPoints[j].wallDepenDir = info.GetInterpolatedNormal();
+					}
+
+					Vector3 depenetrationNormal = collisionPoints[j].wallDepenDir;
+
+					Vector3 depenetration = (Geometry.DepenetrateSphereFromPlaneInDirection(detectOriginOffset, info.sphereRadius, depenetrationNormal, info.point, info.GetInterpolatedNormal()).distance) * depenetrationNormal;
+
+					if (ExtVector3.MagnitudeInDirection(depenetration, depenetrationNormal, false) <= 0) continue;
+
+					depenetrationVelocity += depenetration + extraDepenetrationDistance * depenetrationNormal;
+					depenetrated = true;
+					wallInfo.depenetrated = true;
+					collisionPoints[j].wallDepenetrated = true;
+				}
+
+
+				if (!depenetrated) break;
+
+				wallInfo.totalDepenetration += depenetrationVelocity;
+				depenetrationVelocity = Vector3.zero;
+			}
+
+			wallInfo.iterationsDone = counter;
+
+			//Debug.Log ("depenetration loops: " + counter);
+		}
+
+		return wallInfo;
+	}
+
+	public static PlayerPhysicsController.DepenetrationInfo DepenetrateOld (PlayerPhysicsController ppc, List<SphereCollisionInfo> collisionPoints, Vector3 velocity, Vector3 gravityDir, int maxIterations = 4)
 	{
 		PlayerPhysicsController.DepenetrationInfo depenInfo = new PlayerPhysicsController.DepenetrationInfo ();
 		depenInfo.Initialize ();
@@ -141,7 +205,7 @@ public static class SphereCollisionDetect {
 					SphereCollisionInfo cp = cpi.cp;
 					Vector3 detectOriginOffset = depenInfo.totalDepenetration + depenetrationVelocity + cp.detectionOrigin;
 
-					cpi.SetInfo (i, steepStopLimit, ppc, detectOriginOffset); //sets stuff in the struct
+					cpi.SetInfo (i, steepStopLimit, ppc, detectOriginOffset, gravityDir); //sets stuff in the struct
 					Vector3 depenetrationNormal = cpi.GetDepenetrationNormal();
 					depenInfo.pointsInfo [j] = cpi;
 				
@@ -157,13 +221,13 @@ public static class SphereCollisionDetect {
 					depenInfo.pointsInfo[j] = cpi;
 
 					//to work with our extra grounding, walkableGroundNormal is changed to any kind of up-facing "ground" normal
-					if (!foundWalkableGroundNormal && ExtVector3.MagnitudeInDirection (cpi.cp.interpolatedNormal, -ppc.gravityDir) > 0)
+					if (!foundWalkableGroundNormal && ExtVector3.MagnitudeInDirection (cpi.cp.interpolatedNormal, gravityDir) > 0)
 					{
 						foundWalkableGroundNormal = true;
 					}
 
 
-					depenetrationVelocity += depenetration + 0.00001f * depenetrationNormal;
+					depenetrationVelocity += depenetration + 0.00000f * depenetrationNormal;
 					//depenetrationVelocity += depenetration;
 					depenetrated = true;
 				}
@@ -217,7 +281,12 @@ public static class SphereCollisionDetect {
 	}
 
 
-
+	public struct WallDepenInfo
+    {
+		public Vector3 totalDepenetration;
+		public bool depenetrated;
+		public int iterationsDone;
+    }
 
 	public struct CollisionPointInfo
 	{
@@ -229,43 +298,44 @@ public static class SphereCollisionDetect {
 		public Vector3 depenetrationInNormalDir;
 		public bool wasDepenetrated;
 		public bool wasDetected;
+		public bool onHardEdge;
 
-		public void SetInfo (int i, float steepSlopeLimit, PlayerPhysicsController ppc, Vector3 originOffset)
+		public void SetInfo (int i, float steepSlopeLimit, PlayerPhysicsController ppc, Vector3 originOffset, Vector3 gravityDir)
 		{
+			onHardEdge = false;
 			this.depenetrationNormal = cp.interpolatedNormal;
 
 			if (i < steepSlopeLimit) 
 			{
-				float angleToUp = Vector3.Angle (ppc.groundPivot.up, cp.interpolatedNormal); //to make sure its pointing up and not a ceiling kind of edge
+				float angleToUp = Vector3.Angle (ppc.groundInfo.up, cp.interpolatedNormal); //to make sure its pointing up and not a ceiling kind of edge
 
-				if (cp.isOnEdge) 
+				if (cp.isOnEdge && angleToUp <= 90 && normalsInfo.GetOnHardEdge()) 
 				{
-					if (angleToUp <= 90 && normalsInfo.GetOnHardEdge()) 
+					onHardEdge = true;
+
+					//bool validGroundedStep = ppc.CheckIfEdgeIsSteppable (cp.closestPointOnSurface, originOffset, ppc.groundPivot.up);
+					bool validGroundedStep = false;
+
+					if (!validGroundedStep) 
 					{
-						bool validGroundedStep = ppc.CheckIfEdgeIsSteppable (cp.closestPointOnSurface, originOffset, ppc.groundPivot.up);
-
-						if (!validGroundedStep) 
-						{
-							//do extra checking for when in the air and no ground is found below (we still want to slide up over edges of a low enough height)
-							float height = ExtVector3.MagnitudeInDirection (cp.closestPointOnSurface - (cp.detectionOrigin-(cp.sphereRadius*ppc.groundPivot.up)), ppc.groundPivot.up, false);
-							validGroundedStep = height <= ppc.maxStepHeight*0.9f;
-						}
-
-						if (!validGroundedStep) 
-						{
-							this.invalidStep = true;
-							this.depenetrationNormal = Vector3.ProjectOnPlane (cp.interpolatedNormal, ppc.groundPivot.up).normalized;
-						}
+						//do extra checking for when in the air and no ground is found below (we still want to slide up over edges of a low enough height)
+						float height = ExtVector3.MagnitudeInDirection (cp.closestPointOnSurface - (cp.detectionOrigin-(cp.sphereRadius*ppc.groundInfo.up)), ppc.groundInfo.up, false);
+						//validGroundedStep = height <= ppc.maxStepHeight*0.9f;
 					}
+
+					if (!validGroundedStep) 
+					{
+						this.invalidStep = true;
+						this.depenetrationNormal = Vector3.ProjectOnPlane (cp.interpolatedNormal, ppc.groundInfo.up).normalized;
+					}
+					
 				} 
 				else 
 				{
-					if ((angleToUp < 90) && !ppc.CanWalkToSlope (cp.normal, ppc.groundPivot.up, ppc.groundInfo.GetIsGrounded()) && ppc.groundInfo.GetIsGrounded()) 
+					if ((angleToUp < 90) && !CollisionController.CanWalkToSlope(cp.normal, ppc.groundInfo.up, gravityDir, ppc.groundInfo.GetIsGrounded(), Vector3.zero).can && ppc.groundInfo.GetIsGrounded()) 
 					{
 						this.slopeTooSteep = true;
-						this.depenetrationNormal = Vector3.ProjectOnPlane (cp.interpolatedNormal, ppc.groundPivot.up).normalized;
-
-						//Debug.Log("cant");
+						this.depenetrationNormal = Vector3.ProjectOnPlane (cp.interpolatedNormal, ppc.groundInfo.up).normalized;
 					} 
 				}
 			} 

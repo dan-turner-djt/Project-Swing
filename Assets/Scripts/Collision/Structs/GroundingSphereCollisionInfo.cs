@@ -24,7 +24,6 @@ public struct GroundingSphereCollisionInfo
 	Vector3 transformUp;
 
 
-
 	public bool isOnEdge {get; private set;}
 
 
@@ -38,7 +37,7 @@ public struct GroundingSphereCollisionInfo
 		this.detectionOrigin = detectionOrigin;
 		this.closestPointOnSurface = closestPointOnSurface;
 		this.normal = normal;
-		realNormal = normal;
+		this.realNormal = normal;
 		this.interpolatedNormal = Vector3.zero;
 		isOnEdge = false;
 
@@ -46,8 +45,6 @@ public struct GroundingSphereCollisionInfo
 		//Its important to set the interpolated normal here, otherwise if we added the SphereCollisionInfo to a collection while the interpolated normal wasnt set, 
 		//then every time we access the struct within the collection, it will return a copy which doesnt have the interpolated normal set, causing us to constantly set it.
 		SetInterpolatedNormal(closestPointOnSurface);
-		//SetEdgeInfo (closestPointOnSurface);
-		//SetEdgeInfo (_closestPointOnSurface);
 	}
 
 	public void SetInterpolatedNormal(Vector3 point)
@@ -62,46 +59,28 @@ public struct GroundingSphereCollisionInfo
 		Vector3 interpolatedNormal = detectionOrigin - point;
 
 		//If the detection origin and closestpoint are right on eachother, we return the normal. This is important for when using a capsule.
-		//if(interpolatedNormal.sqrMagnitude < .001f) return realNormal;
-
-		if(!ExtVector3.IsInDirection(interpolatedNormal, realNormal))
-		{
-			//interpolatedNormal = -interpolatedNormal;
-		}
+		//if(Mathf.Approximately(interpolatedNormal.sqrMagnitude, 0)) return realNormal;
 
 		interpolatedNormal.Normalize();
 
-
-
-		//We check for an angle greater than 3 as a safety since our closestPointOnSurface might have been detected slightly inaccurately,
+		//We check for an angle greater than x as a safety since our closestPointOnSurface might have been detected slightly inaccurately,
 		//which might lead to sliding when depenetrating (such as on the floor when standing still)
 		//This is a custom Vector3.Angle method that assumes the vectors are already normalized for performance reasons.
-		if(ExtVector3.Angle(interpolatedNormal.normalized, realNormal.normalized) > 0.2f)
-		//if (!(Mathf.Approximately(interpolatedNormal.x, realNormal.x) && Mathf.Approximately(interpolatedNormal.y, realNormal.y) && Mathf.Approximately(interpolatedNormal.z, realNormal.z)))
+		if(!Mathf.Approximately(ExtVector3.Angle(interpolatedNormal.normalized, realNormal.normalized), 0))
 		{
-			isOnEdge = true;
-			//Debug.Log ("on edge");
-
-			//interpolatedNormal = realOrigin - point;
-
-			//if(interpolatedNormal.sqrMagnitude < .001f) return realNormal;
-
-			if(!ExtVector3.IsInDirection(interpolatedNormal, realNormal))
-			{
-				//interpolatedNormal = -interpolatedNormal;
+			if (collider is SphereCollider || collider is CapsuleCollider)
+            {
+				return interpolatedNormal;
 			}
-
-			//interpolatedNormal.Normalize();
-
-			return interpolatedNormal;
+			else
+            {
+				isOnEdge = true;
+				return interpolatedNormal;
+			}
 		}
 
 		return normal;
-		//return realNormal;
 	}
-
-
-
 
 	public Vector3 GetCollisionVelocity()
 	{

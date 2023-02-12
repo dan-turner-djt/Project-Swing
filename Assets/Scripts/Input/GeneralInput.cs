@@ -4,54 +4,60 @@ using UnityEngine;
 
 public class GeneralInput : MonoBehaviour {
 
-	Dictionary<string, InputAxis> axisDictionary = new Dictionary<string, InputAxis>();
+	public enum AxesNames
+	{
+		Horizontal, Vertical, Jump, Grab, ChangeTailLength, Submit, Cancel, Start, DebugMode, CameraX, CameraY, MouseX, MouseY, 
+		FirstPerson, DebugMoveVertical, DebugPlace, DpadHorizontal
+    }
+
+	Dictionary<int, InputAxis> axisDictionary = new Dictionary<int, InputAxis>();
+	bool controllerConnected = false;
 
 	void Start () 
 	{
-		FillAxisDictionary ();
+		foreach (AxesNames axisName in System.Enum.GetValues(typeof(AxesNames)))
+		{
+			axisDictionary.Add((int)axisName, new InputAxis(axisName.ToString()));
+		}
 	}
 
 	public void DoUpdate () 
 	{
+		string[] controllerNames = Input.GetJoystickNames();
+		controllerConnected = controllerNames.Length > 0 && controllerNames[0] != "";
+
 		foreach (var item in axisDictionary) 
 		{
 			item.Value.DoUpdate ();
 		}
 	}
 
-
-
-	void FillAxisDictionary()
+	public bool GetPressed (AxesNames name)
 	{
-		axisDictionary.Add("Horizontal" , new InputAxis ("Horizontal"));
-		axisDictionary.Add("Vertical" , new InputAxis ("Vertical"));
-		axisDictionary.Add("Jump" , new InputAxis ("Jump"));
-		axisDictionary.Add("Grab" , new InputAxis ("Grab"));
-		axisDictionary.Add("ChangeTailLength" , new InputAxis ("ChangeTailLength"));
-		axisDictionary.Add("Submit" , new InputAxis ("Submit"));
-		axisDictionary.Add("Cancel" , new InputAxis ("Cancel"));
-		axisDictionary.Add("Start" , new InputAxis ("Start"));
+		return axisDictionary[(int)name].GetPressed();
 	}
 
-
-
-	public bool GetPressed (string name)
+	public bool GetButtonDown (AxesNames name)
 	{
-		return axisDictionary[name].GetPressed();
+		return axisDictionary[(int)name].GetButtonDown();
 	}
 
-	public bool GetButtonDown (string name)
+	public bool GetButtonUp (AxesNames name)
 	{
-		return axisDictionary[name].GetButtonDown();
+		return axisDictionary[(int)name].GetButtonUp();
 	}
 
-	public bool GetButtonUp (string name)
+	public float GetRawInput (AxesNames name)
 	{
-		return axisDictionary[name].GetButtonUp();
+		return axisDictionary [(int)name].GetRawInput ();
 	}
 
-	public float GetRawInput (string name)
+	public float GetSmoothedInput(AxesNames name)
 	{
-		return axisDictionary [name].GetRawInput ();
+		return axisDictionary[(int)name].GetSmoothedInput();
 	}
+	public bool GetControllerConnected()
+    {
+		return controllerConnected;
+    }
 }

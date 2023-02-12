@@ -19,7 +19,10 @@ public struct Rect3D
 	public float width {get; private set;}
 	public float height {get; private set;}
 
-	public Rect3D(Vector3 center, Vector3 right, Vector3 up, float width, float height)
+	public float trueWidth { get; private set; }
+	public float trueHeight { get; private set; }
+
+	public Rect3D(Vector3 center, Vector3 right, Vector3 up, float width, float height, float trueWidth, float trueHeight)
 	{
 		Vector3 halfUp = up * (height * .5f);
 		Vector3 halfSide = right * (width * .5f);
@@ -33,6 +36,9 @@ public struct Rect3D
 
 		this.width = width;
 		this.height = height;
+
+		this.trueWidth = trueWidth;
+		this.trueHeight = trueHeight;
 	}
 
 	public Vector3 this[int index]

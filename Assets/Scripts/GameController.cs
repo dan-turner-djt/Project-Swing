@@ -9,8 +9,11 @@ public class GameController : MonoBehaviour {
 
 	ResolutionManager resolutionManager;
 	GeneralSceneController sceneController;
+	GeneralInput input;
 
 	public PersistentSceneRecord sceneRecord;
+
+	public bool debugMode = false;
 
 	public List<string> toggleList = new List<string> {"On", "Off"};
 	public List<string> qualityList = new List<string> ();
@@ -36,7 +39,6 @@ public class GameController : MonoBehaviour {
 	public bool frameByFrame = false;
 
 	public int playerLives = 3;
-
 
 	void Awake () 
 	{
@@ -86,13 +88,23 @@ public class GameController : MonoBehaviour {
 
 	void Update () 
 	{
-		CheckAndFindSceneController ();
+		CheckAndFindSceneController();
+
+		if (input == null)
+        {
+			input = sceneController.GetComponent<GeneralInput>();
+		}
+
+		// Turn on/off Debug Mode
+		if (input.GetButtonDown(GeneralInput.AxesNames.DebugMode))
+		{
+			debugMode = !debugMode;
+		}
 
 		if (sceneController != null) 
 		{
 			sceneController.DoUpdate ();
 		}
-
 	}
 
 

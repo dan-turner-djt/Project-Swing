@@ -88,11 +88,12 @@ public class TextBoxManager : MonoBehaviour
 
         List<TextSectionInfo> newTextSections = new List<TextSectionInfo>();
 
-        string path = "Assets/TextScripts/" + sequenceName + ".txt";
         string readString = "";
 
         try
         {
+            string path = Path.Combine(Application.streamingAssetsPath, "TextScripts/", sequenceName) + ".txt";
+
             StreamReader reader = new StreamReader(path);
             readString = reader.ReadToEnd();
         }
@@ -170,7 +171,7 @@ public class TextBoxManager : MonoBehaviour
             {
                 if (controllable)
                 {
-                    if (inp.GetPressed("Submit") && !holdingDownButton)
+                    if (inp.GetPressed(GeneralInput.AxesNames.Submit) && !holdingDownButton)
                     {
                         if (textSectionsCounter < textSections.Count)
                         {
@@ -208,7 +209,7 @@ public class TextBoxManager : MonoBehaviour
             {
                 if (controllable)
                 {
-                    if (inp.GetPressed("Submit"))
+                    if (inp.GetPressed(GeneralInput.AxesNames.Submit))
                     {
                         animateTextSpeed = fasterAnimateTextSpeed;
                     }
@@ -227,7 +228,7 @@ public class TextBoxManager : MonoBehaviour
 
             //just so we can do a button down press check later
 
-            if (inp.GetPressed("Submit"))
+            if (inp.GetPressed(GeneralInput.AxesNames.Submit))
             {
                 holdingDownButton = true;
             }

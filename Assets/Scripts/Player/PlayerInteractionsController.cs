@@ -171,7 +171,8 @@ public class PlayerInteractionsController : MonoBehaviour
 			StopCoroutine (playerController.cUseSpring);
 			playerController.currentlyUsingSpring = false;
 		}
-		
+
+		playerController.isJumping = false;
 
 		playerController.cUseAirBooster = playerController.UseAirBooster (booster);
 		StartCoroutine (playerController.cUseAirBooster);

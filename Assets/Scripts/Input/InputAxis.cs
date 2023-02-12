@@ -4,8 +4,9 @@ using UnityEngine;
 
 public class InputAxis {
 
-	string name;
+	readonly string name;
 	float currentInput;
+	float currentSmoothedInput;
 	bool pressed;
 	bool buttonDown;
 	bool buttonUp;
@@ -27,6 +28,7 @@ public class InputAxis {
 		buttonUp = false;
 
 		currentInput = Input.GetAxisRaw (name);
+		currentSmoothedInput = Input.GetAxis (name);
 
 		if (currentInput != 0) 
 		{
@@ -68,5 +70,10 @@ public class InputAxis {
 	public float GetRawInput ()
 	{
 		return currentInput;
+	}
+
+	public float GetSmoothedInput()
+	{
+		return currentSmoothedInput;
 	}
 }

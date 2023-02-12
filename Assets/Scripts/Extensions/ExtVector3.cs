@@ -74,6 +74,28 @@ public static class ExtVector3 {
 		return new Vector3(Mathf.Abs(vector.x), Mathf.Abs(vector.y), Mathf.Abs(vector.z));
 	}
 
+	public static Vector3 TransformDirection(Vector3 upDir, Vector3 toChange)
+	{
+		Quaternion rotation = Quaternion.FromToRotation(Vector3.up, upDir);
+		return TransformDirection(rotation, toChange);
+	}
+
+	public static Vector3 TransformDirection(Quaternion rotation, Vector3 vector)
+    {
+		return rotation * vector;
+	}
+
+	public static Vector3 InverseTransformDirection(Vector3 upDir, Vector3 toChange)
+	{
+		Quaternion rotation = Quaternion.FromToRotation(Vector3.up, upDir);
+		return InverseTransformDirection(rotation, toChange);
+	}
+
+	public static Vector3 InverseTransformDirection(Quaternion rotation, Vector3 vector)
+	{
+		return Quaternion.Inverse(rotation) * vector;
+	}
+
 	public static Vector3 ClosestGeneralDirection(Vector3 vector) {return ClosestGeneralDirection(vector, GeneralDirections);}
 	public static Vector3 ClosestGeneralDirection(Vector3 vector, IList<Vector3> directions)
 	{

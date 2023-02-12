@@ -6,11 +6,12 @@ using System.Linq;
 
 public class CameraController : Updatable 
 {
+	private GeneralInput input;
+
 	public LayerMask collisionLayers;
 
 	public float sensitivity = 10f;
 	public Transform player;
-	PlayerInput playerInp;
 	PlayerPhysicsController ppc;
 	public Transform followPosition;
 	public Transform cameraTransform;
@@ -51,12 +52,12 @@ public class CameraController : Updatable
 		base.lateUpdatable = true;
 		base.DoStart ();
 
+		input = sc.GetComponent<GeneralInput>();
 		sc.AddCameraToList (gameObject);
 
 		player = GameObject.Find ("PlayerController").transform;
 		followPosition = GameObject.Find ("CameraFollowPos").transform;
 
-		playerInp = player.GetComponent<PlayerInput>();
 		ppc = player.GetComponent<PlayerPhysicsController>();
 
 		cameraHolder.position = followPosition.position;
@@ -78,8 +79,6 @@ public class CameraController : Updatable
 
 	public override void DoFinalUpdate ()
 	{
-		
-
 		Vector3 playerVelocity = ppc.velocity;
 
 		if (inFirstPerson && playerVelocity.magnitude > 0)
@@ -87,7 +86,7 @@ public class CameraController : Updatable
 			LeaveFirstPerson();
         }
 
-		float firstPersonInp = Input.GetAxisRaw("FirstPerson");
+		float firstPersonInp = input.GetRawInput(GeneralInput.AxesNames.FirstPerson);
 		if (firstPersonInp != 0)
         {
 			if (inFirstPerson && firstPersonInp < 0)
@@ -109,10 +108,6 @@ public class CameraController : Updatable
         {
 			DoNormalBehaviour();
         }
-
-
-
-		
 	}
 
 	public void DoNormalBehaviour ()
@@ -122,9 +117,9 @@ public class CameraController : Updatable
 
 		Vector3 playerVelocity = ppc.velocity;
 
-		if (cameraControlSetting is CameraControl.Mouse)
+		if (cameraControlSetting is CameraControl.Mouse || !input.GetControllerConnected())
 		{
-			float yaw = Input.GetAxisRaw("Mouse X") * sensitivity;
+			float yaw = input.GetRawInput(GeneralInput.AxesNames.MouseX) * sensitivity;
 			//player.Rotate(0, yaw, 0);
 			cameraHolder.Rotate(0, yaw, 0);
 
@@ -132,28 +127,22 @@ public class CameraController : Updatable
 			transform.position = followPosition.position;
 
 
-			pitch += -Input.GetAxisRaw("Mouse Y") * sensitivity;
+			pitch += -input.GetRawInput(GeneralInput.AxesNames.MouseY) * sensitivity;
 			pitch = Mathf.Clamp(pitch, -yMax, yMax);
 
 			transform.localEulerAngles = new Vector3(pitch, transform.localEulerAngles.y, transform.localEulerAngles.z);
 		}
 		else
 		{
-
-
-			Vector2 rawCamInput = new Vector2(Input.GetAxisRaw("CameraX"), Input.GetAxisRaw("CameraY"));
+			Vector2 rawCamInput = new Vector2(input.GetRawInput(GeneralInput.AxesNames.CameraX), input.GetRawInput(GeneralInput.AxesNames.CameraY));
 			Vector2 normCamInput = rawCamInput.normalized;
 			Vector2 camInput = new Vector2(normCamInput.x * Mathf.Abs(rawCamInput.x), normCamInput.y * Mathf.Abs(rawCamInput.y));
 
-
-
-			if (cameraAutoSetting == CameraAuto.On && !SlopeInfo.IsSlopeSteepOrUp(ppc.gravityDir, ppc.groundPivot.up))
+			if (cameraAutoSetting == CameraAuto.On && !SlopeInfo.IsSlopeSteepOrUp(sc.gravityDir, ppc.groundInfo.up))
 			{
 
-				Vector3 playerInput = new Vector3(Input.GetAxis("Horizontal"), 0, Input.GetAxis("Vertical"));
-				Vector3 unnormInput = playerInput;
+				Vector3 playerInput = new Vector3(input.GetSmoothedInput(GeneralInput.AxesNames.Horizontal), 0, input.GetSmoothedInput(GeneralInput.AxesNames.Vertical));
 				playerInput = playerInput.normalized;
-				//playerInput = new Vector3(playerInput.x * Mathf.Abs(unnormInput.x), 0, playerInput.z * Mathf.Abs(unnormInput.z)).normalized;
 
 				float xVelocity = ExtVector3.MagnitudeInDirection(playerVelocity, cameraHolder.right);
 				xVelocity = (Mathf.Sign(xVelocity) == Mathf.Sign(playerInput.x)) ? xVelocity : 0;
@@ -215,7 +204,7 @@ public class CameraController : Updatable
 		inFirstPerson = true;
 		transform.position = player.position;
 		cameraTransform.localPosition = Vector3.zero;
-		Vector3 camForward = Vector3.ProjectOnPlane (ppc.transform.TransformDirection (ppc.facingDir), ppc.gravityDir).normalized;
+		Vector3 camForward = Vector3.ProjectOnPlane (ppc.transform.TransformDirection (ppc.facingDir), sc.gravityDir).normalized;
 		float camAngle = Vector3.SignedAngle(camForward, Vector3.forward, -Vector3.up);
 		cameraHolder.position = player.position;
 		cameraHolder.rotation = Quaternion.identity;
@@ -226,8 +215,6 @@ public class CameraController : Updatable
 		pitch = 0;
 
 		savedForwardDirection = ppc.facingDir;
-
-		//Debug.Log("in first person");
 	}
 
 	public void LeaveFirstPerson ()
@@ -241,8 +228,6 @@ public class CameraController : Updatable
 		transform.localEulerAngles = new Vector3(pitch, transform.localEulerAngles.y, transform.localEulerAngles.z);
 		float forwardAngle = Vector3.SignedAngle(savedForwardDirection, Vector3.forward, -Vector3.up);
 		cameraHolder.eulerAngles = new Vector3(cameraHolder.eulerAngles.x, forwardAngle, cameraHolder.eulerAngles.z);
-
-		//Debug.Log("left first person");
 	}
 
 
@@ -253,15 +238,13 @@ public class CameraController : Updatable
 		cameraHolder.position = player.position;
 		transform.position = player.position;
 
-		Vector2 rawCamInput = new Vector2(Input.GetAxisRaw("CameraX"), Input.GetAxisRaw("CameraY"));
+		Vector2 rawCamInput = new Vector2(input.GetRawInput(GeneralInput.AxesNames.CameraX), input.GetRawInput(GeneralInput.AxesNames.CameraY));
 		Vector2 normCamInput = rawCamInput.normalized;
 		Vector2 camInput = new Vector2(normCamInput.x * Mathf.Abs(rawCamInput.x), normCamInput.y * Mathf.Abs(rawCamInput.y));
 
 		cameraHolder.Rotate(0, manualTurnSpeed * camInput.x * Time.deltaTime, 0);
 		float forwardAngle = Vector3.SignedAngle(ppc.facingDir, Vector3.forward, -Vector3.up);
 		float difference = Mathf.DeltaAngle(forwardAngle, cameraHolder.eulerAngles.y);
-
-		Debug.Log(difference);
 
 		if (difference > 90)
         {

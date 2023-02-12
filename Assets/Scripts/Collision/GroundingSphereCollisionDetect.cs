@@ -171,7 +171,7 @@ public static class GroundingSphereCollisionDetect {
 
 
 	static List<ContactInfo> normalsBufferSphere = new List<ContactInfo>();
-	public static GroundingEdgeCollisionInfo DetectEdgeCollisions(Collider collider, Vector3 detectionOrigin, float radius, Vector3 detectedGroundNormal, Vector3 interpolatedNormal, int mask, IList<Component> ignoreColliders, Vector3 transformUp, Vector3 gravDir, Vector3 velocity, float checkOffset = 0, bool multipleContactsPerCollider = true)
+	public static GroundingEdgeCollisionInfo DetectEdgeCollisions(Collider collider, Vector3 detectionOrigin, float radius, Vector3 detectedGroundNormal, Vector3 interpolatedNormal, Vector3 transformUp, Vector3 gravDir, Vector3 velocity, float checkOffset = 0, bool multipleContactsPerCollider = true)
 	{
 		GroundingEdgeCollisionInfo edgeInfo = new GroundingEdgeCollisionInfo();
 		normalsBufferSphere = ExtCollider.CollectNormalsOnCollider(collider, detectionOrigin, radius + checkOffset, normalsBufferSphere, multipleContactsPerCollider);
@@ -185,21 +185,6 @@ public static class GroundingSphereCollisionDetect {
 			edgeInfo = ProcessEdgeInfo ((BoxCollider)collider, detectionOrigin, radius, normalsBufferSphere, detectedGroundNormal, interpolatedNormal, transformUp, gravDir, velocity);
 		} 
 
-
-
-		/*for(int j = 0; j < normalsBufferSphere.Count; j++)
-		{
-			//We calculate sphereDetectionOriginInCapsule for our depenetration method since we need to know where the spheres detection origin would be within the capsule.
-			Vector3 sphereDetectionOriginInSphere = detectionOrigin;
-
-			//We store just the radius, not radius + checkOffset, so that our depenetration method has the correct radius to depenetrate with.
-
-			Debug.Log ("edgeNormal" + j + ": " + normalsBufferSphere [j]);
-		}*/
-
-
-
-
 		return edgeInfo;
 	}
 
@@ -209,27 +194,6 @@ public static class GroundingSphereCollisionDetect {
 		List<ContactInfo> possibleNormals = new List<ContactInfo> ();
 
 		Vector3 closestGroundNormal = detectedGroundNormal;
-
-		//first find which normal is closest to the current transformUp and make that the new ground normal
-		/*float smallestAngleBetween = Mathf.Infinity;
-		Vector3 closestGroundNormal = Vector3.zero;
-
-		for (int i = 0; i < foundNormals.Count; i++) 
-		{
-			if (ExtVector3.IsInDirection (interpolatedNormal, foundNormals [i].normal, .001f, true)) 
-			{
-				float angleBetween = Vector3.Angle (transformUp.normalized, foundNormals [i].normal.normalized);
-				if (angleBetween < smallestAngleBetween) 
-				{
-					smallestAngleBetween = angleBetween;
-					closestGroundNormal = foundNormals [i].normal;
-				}
-			}
-		}
-
-		//Debug.Log (closestGroundNormal);*/
-
-		//Vector3 flattenedInterpolatedNormal = Vector3.ProjectOnPlane (interpolatedNormal, closestGroundNormal);
 
 		for (int i = 0; i < foundNormals.Count; i++) 
 		{
@@ -244,8 +208,6 @@ public static class GroundingSphereCollisionDetect {
 			} 
 		}
 
-		//Debug.Log ("possibleEdgeNormals.Count=" + possibleNormals.Count);
-
 		ContactInfo detectedGroundPair = new ContactInfo (centre, closestGroundNormal);
 		return new GroundingEdgeCollisionInfo (collider, centre, radius, detectedGroundPair, interpolatedNormal, possibleNormals, transformUp, gravDir, velocity);
 	}
@@ -253,8 +215,6 @@ public static class GroundingSphereCollisionDetect {
 
 	public static GroundingEdgeCollisionInfo ProcessEdgeInfo (MeshCollider collider, Vector3 centre, float radius, List<ContactInfo> foundNormals, Vector3 detectedGroundNormal, Vector3 interpolatedNormal, Vector3 transformUp, Vector3 gravDir, Vector3 velocity) 
 	{
-		//Debug.Log ("total edges count: " + foundNormals.Count);
-
 		List<ContactInfo> possibleEdgeNormals = new List<ContactInfo> ();
 
 		for (int i = 0; i < foundNormals.Count; i++) 
@@ -282,8 +242,6 @@ public static class GroundingSphereCollisionDetect {
 				}
 			} 
 		}
-
-		//Debug.Log ("possible edges count: " + possibleEdgeNormals.Count);
 
 		ContactInfo detectedGroundPair = new ContactInfo (centre, detectedGroundNormal);
 		return new GroundingEdgeCollisionInfo (collider, centre, radius, detectedGroundPair, interpolatedNormal, possibleEdgeNormals, transformUp, gravDir, velocity);

@@ -283,7 +283,7 @@ public class MeshAABBTree : MonoBehaviour
 					resultsBuffer.Add(new ContactInfo(transform.TransformPoint(closestPoint.position), transform.TransformDirection(planeNormal)));
 				}
 
-				if (!forGroundCast || true) 
+				if (!forGroundCast) 
 				{
 					//when gathering all the points during a groundcast, cleaning behind planes means sometimes higher unwalkable steps cause lower walkable ground to be removed, resulting in
 					//the ground checking thinking there is no valid ground, and as we already perform a number of validity and height checks on these points during grounding, it is safe

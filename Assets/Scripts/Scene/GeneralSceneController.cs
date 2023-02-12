@@ -11,7 +11,7 @@ public class GeneralSceneController : MonoBehaviour {
 	public PersistentSceneRecord sceneRecord;
 	public TextBoxManager textBoxManager;
 
-	protected GeneralInput input;
+	public GeneralInput input;
 	protected UIStackManager UIStackManager;
 
 	public List<Updatable> updatables = new List<Updatable>();
